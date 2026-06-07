@@ -143,6 +143,12 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 		return nil, fmt.Errorf("fetch provider: %w", err)
 	}
 
+	// DEBUG: Always log that we reached this point
+	_, _ = s.db.Pool.Exec(ctx, `
+		INSERT INTO audit_logs (action, entity_type, entity_id, details)
+		VALUES ('DEBUG_PROVIDER_CHECK', 'transaction', $1, $2)
+	`, txID, fmt.Sprintf(`{"provider_id":"%s","provider_name":"%s","has_base_url":%v}`, provider.ID, provider.Name, provider.BaseURL != nil && *provider.BaseURL != ""))
+
 	// Call provider API if base_url is configured
 	if provider.BaseURL != nil && *provider.BaseURL != "" {
 		fmt.Printf("[DEBUG] Calling provider API: %s for transaction %s\n", *provider.BaseURL, txID)
