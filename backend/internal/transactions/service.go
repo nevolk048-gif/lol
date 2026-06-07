@@ -1,0 +1,285 @@
+package transactions
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/paymentsgate/paymentsgate/internal/routing"
+	"github.com/paymentsgate/paymentsgate/internal/websocket"
+	"github.com/paymentsgate/paymentsgate/pkg/database"
+	"github.com/paymentsgate/paymentsgate/pkg/models"
+)
+
+type Service struct {
+	db     *database.DB
+	router *routing.Engine
+	hub    *websocket.Hub
+}
+
+func NewService(db *database.DB, router *routing.Engine, hub *websocket.Hub) *Service {
+	return &Service{db: db, router: router, hub: hub}
+}
+
+type CreateDepositRequest struct {
+	Amount     float64 `json:"amount" binding:"required,gt=0"`
+	Currency   string  `json:"currency" binding:"required,len=3"`
+	Country    string  `json:"country" binding:"required,len=2"`
+	ExternalID *string `json:"external_id"`
+	PlayerID   *string `json:"player_id"`
+}
+
+type DepositResponse struct {
+	TransactionID uuid.UUID         `json:"transaction_id"`
+	Status        models.TransactionStatus `json:"status"`
+	Requisite     *RequisiteInfo    `json:"requisite,omitempty"`
+	Provider      *ProviderInfo     `json:"provider,omitempty"`
+}
+
+type RequisiteInfo struct {
+	BankName      string `json:"bank_name"`
+	HolderName    string `json:"holder_name"`
+	AccountNumber string `json:"account_number"`
+}
+
+type ProviderInfo struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
+type ListFilter struct {
+	Page      int
+	PerPage   int
+	Status    string
+	Country   string
+	CasinoID  string
+	ProviderID string
+	MinAmount *float64
+	MaxAmount *float64
+	DateFrom  *time.Time
+	DateTo    *time.Time
+	IsSandbox *bool
+}
+
+func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req CreateDepositRequest, isSandbox bool) (*DepositResponse, error) {
+	start := time.Now()
+	txID := uuid.New()
+
+	_, err := s.db.Pool.Exec(ctx, `
+		INSERT INTO transactions (id, external_id, casino_id, amount, currency, country, status, player_id, is_sandbox)
+		VALUES ($1, $2, $3, $4, $5, $6, 'NEW', $7, $8)
+	`, txID, req.ExternalID, casinoID, req.Amount, req.Currency, req.Country, req.PlayerID, isSandbox)
+	if err != nil {
+		return nil, fmt.Errorf("create transaction: %w", err)
+	}
+
+	s.hub.Broadcast(websocket.EventNewTransaction, map[string]interface{}{
+		"id":       txID,
+		"amount":   req.Amount,
+		"currency": req.Currency,
+		"country":  req.Country,
+		"status":   models.TxStatusNew,
+	})
+
+	routeResult, err := s.router.Route(ctx, routing.RouteRequest{
+		Amount:    req.Amount,
+		Currency:  req.Currency,
+		Country:   req.Country,
+		IsSandbox: isSandbox,
+	})
+
+	resp := &DepositResponse{
+		TransactionID: txID,
+		Status:        models.TxStatusNew,
+	}
+
+	if err != nil {
+		_, _ = s.db.Pool.Exec(ctx, `UPDATE transactions SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`, txID)
+		resp.Status = models.TxStatusCancelled
+		s.hub.Broadcast(websocket.EventError, map[string]interface{}{
+			"transaction_id": txID,
+			"error":          err.Error(),
+		})
+		return resp, nil
+	}
+
+	if err := s.router.ReserveRequisiteLimit(ctx, routeResult.RequisiteID, req.Amount); err != nil {
+		_, _ = s.db.Pool.Exec(ctx, `UPDATE transactions SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`, txID)
+		resp.Status = models.TxStatusCancelled
+		return resp, nil
+	}
+
+	now := time.Now()
+	processingMs := time.Since(start).Milliseconds()
+	_, err = s.db.Pool.Exec(ctx, `
+		UPDATE transactions
+		SET provider_id = $2, requisite_id = $3, status = 'WAITING_PAYMENT',
+		    assigned_at = $4, processing_ms = $5, updated_at = NOW()
+		WHERE id = $1
+	`, txID, routeResult.ProviderID, routeResult.RequisiteID, now, processingMs)
+	if err != nil {
+		return nil, err
+	}
+
+	var requisite models.Requisite
+	var provider models.Provider
+	_ = s.db.Pool.QueryRow(ctx, `SELECT bank_name, holder_name, account_number FROM requisites WHERE id = $1`, routeResult.RequisiteID).
+		Scan(&requisite.BankName, &requisite.HolderName, &requisite.AccountNumber)
+	_ = s.db.Pool.QueryRow(ctx, `SELECT id, name FROM providers WHERE id = $1`, routeResult.ProviderID).
+		Scan(&provider.ID, &provider.Name)
+
+	resp.Status = models.TxStatusWaitingPayment
+	resp.Requisite = &RequisiteInfo{
+		BankName:      requisite.BankName,
+		HolderName:    requisite.HolderName,
+		AccountNumber: requisite.AccountNumber,
+	}
+	resp.Provider = &ProviderInfo{ID: provider.ID, Name: provider.Name}
+
+	s.hub.Broadcast(websocket.EventStatusChange, map[string]interface{}{
+		"transaction_id": txID,
+		"status":         models.TxStatusWaitingPayment,
+		"provider_id":    routeResult.ProviderID,
+	})
+
+	_, _ = s.db.Pool.Exec(ctx, `
+		INSERT INTO audit_logs (action, entity_type, entity_id, details)
+		VALUES ('TRANSACTION_ROUTED', 'transaction', $1, $2)
+	`, txID, fmt.Sprintf(`{"provider_id":"%s","requisite_id":"%s"}`, routeResult.ProviderID, routeResult.RequisiteID))
+
+	return resp, nil
+}
+
+func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*models.Transaction, error) {
+	return s.scanTransaction(ctx, `
+		SELECT t.id, t.external_id, t.casino_id, t.provider_id, t.requisite_id,
+		       t.amount, t.currency, t.country, t.status, t.player_id, t.is_sandbox,
+		       t.processing_ms, t.created_at, t.updated_at, t.assigned_at, t.paid_at,
+		       COALESCE(c.name, ''), COALESCE(p.name, ''), COALESCE(r.bank_name, '')
+		FROM transactions t
+		LEFT JOIN casinos c ON c.id = t.casino_id
+		LEFT JOIN providers p ON p.id = t.provider_id
+		LEFT JOIN requisites r ON r.id = t.requisite_id
+		WHERE t.id = $1
+	`, id)
+}
+
+func (s *Service) List(ctx context.Context, f ListFilter) ([]models.Transaction, int64, error) {
+	if f.Page < 1 {
+		f.Page = 1
+	}
+	if f.PerPage < 1 || f.PerPage > 100 {
+		f.PerPage = 20
+	}
+
+	where := "WHERE 1=1"
+	args := []interface{}{}
+	argIdx := 1
+
+	if f.Status != "" {
+		where += fmt.Sprintf(" AND t.status = $%d", argIdx)
+		args = append(args, f.Status)
+		argIdx++
+	}
+	if f.Country != "" {
+		where += fmt.Sprintf(" AND t.country = $%d", argIdx)
+		args = append(args, f.Country)
+		argIdx++
+	}
+	if f.CasinoID != "" {
+		where += fmt.Sprintf(" AND t.casino_id = $%d", argIdx)
+		args = append(args, f.CasinoID)
+		argIdx++
+	}
+	if f.ProviderID != "" {
+		where += fmt.Sprintf(" AND t.provider_id = $%d", argIdx)
+		args = append(args, f.ProviderID)
+		argIdx++
+	}
+	if f.IsSandbox != nil {
+		where += fmt.Sprintf(" AND t.is_sandbox = $%d", argIdx)
+		args = append(args, *f.IsSandbox)
+		argIdx++
+	}
+
+	var total int64
+	countQuery := "SELECT COUNT(*) FROM transactions t " + where
+	if err := s.db.Pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	offset := (f.Page - 1) * f.PerPage
+	query := fmt.Sprintf(`
+		SELECT t.id, t.external_id, t.casino_id, t.provider_id, t.requisite_id,
+		       t.amount, t.currency, t.country, t.status, t.player_id, t.is_sandbox,
+		       t.processing_ms, t.created_at, t.updated_at, t.assigned_at, t.paid_at,
+		       COALESCE(c.name, ''), COALESCE(p.name, ''), COALESCE(r.bank_name, '')
+		FROM transactions t
+		LEFT JOIN casinos c ON c.id = t.casino_id
+		LEFT JOIN providers p ON p.id = t.provider_id
+		LEFT JOIN requisites r ON r.id = t.requisite_id
+		%s ORDER BY t.created_at DESC LIMIT $%d OFFSET $%d
+	`, where, argIdx, argIdx+1)
+	args = append(args, f.PerPage, offset)
+
+	rows, err := s.db.Pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var txs []models.Transaction
+	for rows.Next() {
+		tx, err := scanTransactionRow(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		txs = append(txs, *tx)
+	}
+	return txs, total, rows.Err()
+}
+
+func (s *Service) UpdateStatus(ctx context.Context, id uuid.UUID, status models.TransactionStatus) error {
+	query := `UPDATE transactions SET status = $2, updated_at = NOW()`
+	args := []interface{}{id, status}
+
+	if status == models.TxStatusPaid {
+		query += `, paid_at = NOW()`
+	}
+	query += ` WHERE id = $1`
+
+	tag, err := s.db.Pool.Exec(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+
+	s.hub.Broadcast(websocket.EventStatusChange, map[string]interface{}{
+		"transaction_id": id,
+		"status":         status,
+	})
+	return nil
+}
+
+func (s *Service) scanTransaction(ctx context.Context, query string, id uuid.UUID) (*models.Transaction, error) {
+	row := s.db.Pool.QueryRow(ctx, query, id)
+	return scanTransactionRow(row)
+}
+
+func scanTransactionRow(row pgx.Row) (*models.Transaction, error) {
+	var tx models.Transaction
+	err := row.Scan(
+		&tx.ID, &tx.ExternalID, &tx.CasinoID, &tx.ProviderID, &tx.RequisiteID,
+		&tx.Amount, &tx.Currency, &tx.Country, &tx.Status, &tx.PlayerID, &tx.IsSandbox,
+		&tx.ProcessingMs, &tx.CreatedAt, &tx.UpdatedAt, &tx.AssignedAt, &tx.PaidAt,
+		&tx.CasinoName, &tx.ProviderName, &tx.RequisiteBank,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &tx, nil
+}

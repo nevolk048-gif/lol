@@ -1,0 +1,69 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "PaymentsGate API",
+    "description": "Enterprise payment aggregator platform",
+    "version": "1.0.0"
+  },
+  "servers": [{ "url": "http://localhost:8080/api/v1" }],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "User login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Success" } }
+      }
+    },
+    "/deposit/create": {
+      "post": {
+        "tags": ["Transactions"],
+        "summary": "Create casino deposit",
+        "security": [{ "ApiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amount": { "type": "number" },
+                  "currency": { "type": "string" },
+                  "country": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/dashboard": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Get dashboard analytics",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Success" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" },
+      "ApiKeyAuth": { "type": "apiKey", "in": "header", "name": "X-API-Key" }
+    }
+  }
+}
