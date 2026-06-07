@@ -30,11 +30,13 @@ export default function AdminPage() {
   const { data: users } = useQuery({
     queryKey: ["users"],
     queryFn: () => api.getUsers(),
+    select: (data) => Array.isArray(data) ? data : [],
   });
 
   const { data: auditLogs } = useQuery({
     queryKey: ["audit-logs"],
     queryFn: () => api.getAuditLogs({ per_page: "20" }),
+    select: (data) => Array.isArray(data) ? data : [],
   });
 
   const createMutation = useMutation({
