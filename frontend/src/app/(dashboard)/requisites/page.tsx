@@ -12,8 +12,10 @@ import { TableSkeleton, EmptyState } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
 import { CreditCard, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { useI18n } from "@/hooks/use-i18n";
 
 export default function RequisitesPage() {
+  const { t } = useI18n();
   const [showCreate, setShowCreate] = useState(false);
   const [formData, setFormData] = useState({
     provider_id: "",
@@ -41,7 +43,7 @@ export default function RequisitesPage() {
   const createMutation = useMutation({
     mutationFn: (data: typeof formData) => api.createRequisite(data),
     onSuccess: () => {
-      toast.success("Requisite created successfully");
+      toast.success(t("requisiteCreated"));
       queryClient.invalidateQueries({ queryKey: ["requisites"] });
       setShowCreate(false);
       setFormData({
@@ -55,7 +57,7 @@ export default function RequisitesPage() {
         is_sandbox: false,
       });
     },
-    onError: () => toast.error("Failed to create requisite"),
+    onError: () => toast.error(t("failedToCreate")),
   });
 
   if (isLoading) return <TableSkeleton rows={6} />;
