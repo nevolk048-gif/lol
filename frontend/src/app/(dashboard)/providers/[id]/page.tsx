@@ -21,6 +21,7 @@ export default function ProviderDetailPage() {
   const { data: requisites } = useQuery({
     queryKey: ["requisites", id],
     queryFn: () => api.getRequisites(id),
+    select: (data) => Array.isArray(data) ? data : [],
   });
 
   if (isLoading) {

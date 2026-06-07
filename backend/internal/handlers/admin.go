@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -104,6 +105,8 @@ func (h *AdminHandler) RegisterRoutes(rg *gin.RouterGroup, auth gin.HandlerFunc)
 			sandboxGroup.POST("/generate-traffic", h.SandboxGenerateTraffic)
 			sandboxGroup.POST("/generate-stats", h.SandboxGenerateStats)
 		}
+
+		api.POST("/test-transaction", middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin), h.CreateTestTransaction)
 
 		api.POST("/migrate", middleware.RequireRoles(models.RoleSuperAdmin), func(c *gin.Context) {
 			response.OK(c, gin.H{"message": "migrations run via Railway"})
@@ -511,6 +514,37 @@ func (h *AdminHandler) SandboxGenerateStats(c *gin.Context) {
 		return
 	}
 	response.OK(c, gin.H{"message": msg})
+}
+
+func (h *AdminHandler) CreateTestTransaction(c *gin.Context) {
+	var req struct {
+		CasinoID   uuid.UUID `json:"casino_id" binding:"required"`
+		ProviderID uuid.UUID `json:"provider_id"`
+		Amount     float64   `json:"amount" binding:"required,gt=0"`
+		Currency   string    `json:"currency" binding:"required"`
+		Country    string    `json:"country" binding:"required"`
+		PlayerID   string    `json:"player_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	// Create transaction using the transactions service
+	tx, err := h.transactions.CreateDeposit(c.Request.Context(), req.CasinoID, transactions.CreateDepositRequest{
+		Amount:     req.Amount,
+		Currency:   req.Currency,
+		Country:    req.Country,
+		PlayerID:   req.PlayerID,
+		ExternalID: fmt.Sprintf("test_%s", uuid.New().String()[:8]),
+	})
+	if err != nil {
+		c.Error(err)
+		response.InternalError(c, "failed to create test transaction: "+err.Error())
+		return
+	}
+
+	response.Created(c, tx)
 }
 
 type ProviderAPIHandler struct {

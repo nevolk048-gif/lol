@@ -14,6 +14,7 @@ import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useI18n } from "@/hooks/use-i18n";
 import type { User, AuditLog } from "@/types";
+import { TestTransactionForm } from "@/components/test-transaction-form";
 
 export default function AdminPage() {
   const { t } = useI18n();
@@ -153,6 +154,8 @@ export default function AdminPage() {
           <DataTable data={auditLogs ?? []} columns={logColumns} />
         </CardContent>
       </Card>
+
+      <TestTransactionForm />
     </div>
   );
 }

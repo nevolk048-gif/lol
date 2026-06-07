@@ -211,6 +211,20 @@ class ApiClient {
       body: JSON.stringify({ casino_id: casinoId, count }),
     });
   }
+
+  createTestTransaction(data: {
+    casino_id: string;
+    provider_id?: string;
+    amount: number;
+    currency: string;
+    country: string;
+    player_id?: string;
+  }) {
+    return this.request<import("@/types").Transaction>("/test-transaction", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 export const api = new ApiClient();
