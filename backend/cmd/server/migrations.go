@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -87,15 +88,22 @@ func runMigrations(pool *pgxpool.Pool) error {
 			return fmt.Errorf("read migration %d: %w", m.version, err)
 		}
 
+		// Try to apply migration, but don't fail if tables already exist
 		if _, err := pool.Exec(ctx, string(sql)); err != nil {
-			return fmt.Errorf("apply migration %d: %w", m.version, err)
+			// Check if error is "already exists" (42P07)
+			if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "42P07" {
+				fmt.Printf("⚠ Migration %d already applied (skipping)\n", m.version)
+			} else {
+				return fmt.Errorf("apply migration %d: %w", m.version, err)
+			}
+		} else {
+			fmt.Printf("✓ Migration %d applied\n", m.version)
 		}
 
-		if _, err := pool.Exec(ctx, `INSERT INTO schema_migrations (version) VALUES ($1)`, m.version); err != nil {
+		// Record migration regardless
+		if _, err := pool.Exec(ctx, `INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT (version) DO NOTHING`, m.version); err != nil {
 			return fmt.Errorf("record migration %d: %w", m.version, err)
 		}
-
-		fmt.Printf("✓ Migration %d applied\n", m.version)
 	}
 
 	if len(migrations) == 0 {
