@@ -223,7 +223,8 @@ func (h *AdminHandler) CreateProvider(c *gin.Context) {
 	}
 	p, err := h.providers.Create(c.Request.Context(), req)
 	if err != nil {
-		response.InternalError(c, "failed to create provider")
+		c.Error(err) // Log the actual error
+		response.InternalError(c, "failed to create provider: "+err.Error())
 		return
 	}
 	h.hub.Broadcast(websocket.EventProviderConnected, p)
@@ -273,7 +274,8 @@ func (h *AdminHandler) CreateCasino(c *gin.Context) {
 	}
 	cas, err := h.casinos.Create(c.Request.Context(), req)
 	if err != nil {
-		response.InternalError(c, "failed to create casino")
+		c.Error(err) // Log the actual error
+		response.InternalError(c, "failed to create casino: "+err.Error())
 		return
 	}
 	h.hub.Broadcast(websocket.EventCasinoConnected, cas)
