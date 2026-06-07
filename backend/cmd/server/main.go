@@ -51,6 +51,13 @@ func main() {
 	}
 	defer db.Close()
 
+	// Run migrations automatically
+	log.Println("Running database migrations...")
+	if err := runMigrations(db.Pool); err != nil {
+		log.Fatalf("migrations failed: %v", err)
+	}
+	log.Println("Migrations completed successfully")
+
 	redisClient, err := redispkg.Connect(ctx, cfg.Redis.URL)
 	if err != nil {
 		log.Printf("redis connection warning: %v", err)
