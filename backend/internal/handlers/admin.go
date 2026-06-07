@@ -96,10 +96,6 @@ func (h *AdminHandler) RegisterRoutes(rg *gin.RouterGroup, auth gin.HandlerFunc)
 
 		api.GET("/audit-logs", middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin), h.ListAuditLogs)
 		api.GET("/integration-logs", h.ListIntegrationLogs)
-	}
-
-	// Debug endpoints (public for troubleshooting)
-	rg.GET("/debug/last-audit-logs", h.DebugLastAuditLogs)
 
 		sandboxGroup := api.Group("/sandbox")
 		sandboxGroup.Use(middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin))
@@ -117,6 +113,10 @@ func (h *AdminHandler) RegisterRoutes(rg *gin.RouterGroup, auth gin.HandlerFunc)
 			response.OK(c, gin.H{"message": "migrations run via Railway"})
 		})
 	}
+
+	// Debug endpoints (public for troubleshooting)
+	rg.GET("/debug/last-audit-logs", h.DebugLastAuditLogs)
+}
 }
 
 func (h *AdminHandler) Dashboard(c *gin.Context) {
