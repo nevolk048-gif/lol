@@ -1,14 +1,15 @@
 package middleware
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/paymentsgate/paymentsgate/pkg/response"
 )
 
 type idempotencyCache struct {
@@ -18,7 +19,7 @@ type idempotencyCache struct {
 
 type cachedResponse struct {
 	statusCode int
-	body       interface{}
+	body       []byte
 	timestamp  time.Time
 }
 
@@ -54,7 +55,6 @@ func IdempotencyMiddleware() gin.HandlerFunc {
 
 		// If no key provided, use fallback: hash of critical request data
 		if idempotencyKey == "" && c.Request.Method == "POST" {
-			// Fallback: generate key from merchant-id + body hash for 10-minute window
 			merchantID := c.GetHeader("merchant-id")
 			if merchantID != "" {
 				bodyHash := hashRequestBody(c)
@@ -73,8 +73,7 @@ func IdempotencyMiddleware() gin.HandlerFunc {
 		cache.mu.RUnlock()
 
 		if exists {
-			// Return cached response
-			c.JSON(cached.statusCode, cached.body)
+			c.Data(cached.statusCode, "application/json", cached.body)
 			c.Abort()
 			return
 		}
@@ -82,7 +81,7 @@ func IdempotencyMiddleware() gin.HandlerFunc {
 		// Create a response writer wrapper to capture the response
 		writer := &responseWriter{
 			ResponseWriter: c.Writer,
-			body:           nil,
+			body:           &bytes.Buffer{},
 		}
 		c.Writer = writer
 
@@ -93,7 +92,7 @@ func IdempotencyMiddleware() gin.HandlerFunc {
 			cache.mu.Lock()
 			cache.store[idempotencyKey] = &cachedResponse{
 				statusCode: writer.Status(),
-				body:       writer.body,
+				body:       writer.body.Bytes(),
 				timestamp:  time.Now(),
 			}
 			cache.mu.Unlock()
@@ -103,19 +102,22 @@ func IdempotencyMiddleware() gin.HandlerFunc {
 
 type responseWriter struct {
 	gin.ResponseWriter
-	body interface{}
+	body *bytes.Buffer
 }
 
 func (w *responseWriter) Write(b []byte) (int, error) {
+	w.body.Write(b)
 	return w.ResponseWriter.Write(b)
 }
 
 func (w *responseWriter) WriteString(s string) (int, error) {
+	w.body.WriteString(s)
 	return w.ResponseWriter.WriteString(s)
 }
 
 func hashRequestBody(c *gin.Context) string {
-	body, _ := c.GetRawData()
+	body, _ := io.ReadAll(c.Request.Body)
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
 	hash := sha256.Sum256(body)
 	return hex.EncodeToString(hash[:])[:16]
 }
