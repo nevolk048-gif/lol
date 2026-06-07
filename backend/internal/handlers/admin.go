@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -95,6 +96,7 @@ func (h *AdminHandler) RegisterRoutes(rg *gin.RouterGroup, auth gin.HandlerFunc)
 
 		api.GET("/audit-logs", middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin), h.ListAuditLogs)
 		api.GET("/integration-logs", h.ListIntegrationLogs)
+		api.GET("/debug/last-audit-logs", h.DebugLastAuditLogs)
 
 		sandboxGroup := api.Group("/sandbox")
 		sandboxGroup.Use(middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin))
@@ -445,6 +447,41 @@ func (h *AdminHandler) ListIntegrationLogs(c *gin.Context) {
 		return
 	}
 	response.Paginated(c, logs, filter.Page, filter.PerPage, total)
+}
+
+func (h *AdminHandler) DebugLastAuditLogs(c *gin.Context) {
+	rows, err := h.db.Pool.Query(c.Request.Context(), `
+		SELECT action, entity_type, entity_id, details, created_at
+		FROM audit_logs
+		ORDER BY created_at DESC
+		LIMIT 20
+	`)
+	if err != nil {
+		response.InternalError(c, "failed to query audit logs")
+		return
+	}
+	defer rows.Close()
+
+	var logs []map[string]interface{}
+	for rows.Next() {
+		var action, entityType, details string
+		var entityID *string
+		var createdAt time.Time
+
+		if err := rows.Scan(&action, &entityType, &entityID, &details, &createdAt); err != nil {
+			continue
+		}
+
+		logs = append(logs, map[string]interface{}{
+			"action":      action,
+			"entity_type": entityType,
+			"entity_id":   entityID,
+			"details":     details,
+			"created_at":  createdAt,
+		})
+	}
+
+	response.OK(c, logs)
 }
 
 func (h *AdminHandler) SandboxSetup(c *gin.Context) {
