@@ -15,7 +15,7 @@ export function TestTransactionForm() {
   const queryClient = useQueryClient();
   const [formData, setFormData] = useState({
     casino_id: "",
-    provider_id: "",
+    provider_id: "auto",
     amount: "100",
     currency: "USD",
     country: "US",
@@ -41,7 +41,7 @@ export function TestTransactionForm() {
         amount: parseFloat(data.amount),
         currency: data.currency,
         country: data.country,
-        ...(data.provider_id && { provider_id: data.provider_id }),
+        ...(data.provider_id && data.provider_id !== "auto" && { provider_id: data.provider_id }),
         ...(data.player_id && { player_id: data.player_id }),
       };
       return api.createTestTransaction(payload);
@@ -166,12 +166,12 @@ export function TestTransactionForm() {
             </div>
             <div>
               <Label>Provider (optional)</Label>
-              <Select value={formData.provider_id} onValueChange={(v) => setFormData({ ...formData, provider_id: v })}>
+              <Select value={formData.provider_id || "auto"} onValueChange={(v) => setFormData({ ...formData, provider_id: v === "auto" ? "" : v })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Auto-assign" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Auto-assign</SelectItem>
+                  <SelectItem value="auto">Auto-assign</SelectItem>
                   {providers?.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name}
