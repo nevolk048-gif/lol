@@ -1,20 +1,44 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { api } from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { StatCardSkeleton, EmptyState } from "@/components/ui/skeleton";
 import { formatCurrency, formatNumber } from "@/lib/utils";
-import { Building2, ArrowRight } from "lucide-react";
+import { Building2, ArrowRight, Plus } from "lucide-react";
+import { toast } from "sonner";
 import type { Provider } from "@/types";
 
 export default function ProvidersPage() {
+  const [showCreate, setShowCreate] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    webhook_url: "",
+    is_sandbox: false,
+  });
+
+  const queryClient = useQueryClient();
+
   const { data, isLoading } = useQuery({
     queryKey: ["providers"],
     queryFn: () => api.getProviders(),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: typeof formData) => api.createProvider(data),
+    onSuccess: () => {
+      toast.success("Provider created successfully");
+      queryClient.invalidateQueries({ queryKey: ["providers"] });
+      setShowCreate(false);
+      setFormData({ name: "", webhook_url: "", is_sandbox: false });
+    },
+    onError: () => toast.error("Failed to create provider"),
   });
 
   if (isLoading) {
@@ -25,16 +49,127 @@ export default function ProvidersPage() {
     );
   }
 
-  if (!data?.length) {
-    return <EmptyState icon={Building2} title="No providers" description="Add your first payment provider to start routing." />;
+  if (!Array.isArray(data) || data.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Providers</h1>
+            <p className="text-muted-foreground">Payment provider network and performance</p>
+          </div>
+          <Button onClick={() => setShowCreate(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create Provider
+          </Button>
+        </div>
+        {showCreate && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Create New Provider</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate(formData); }} className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium">Name</label>
+                  <Input
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="Provider name"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Webhook URL (optional)</label>
+                  <Input
+                    value={formData.webhook_url}
+                    onChange={(e) => setFormData({ ...formData, webhook_url: e.target.value })}
+                    placeholder="https://provider.com/webhook"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_sandbox}
+                    onChange={(e) => setFormData({ ...formData, is_sandbox: e.target.checked })}
+                    className="rounded"
+                  />
+                  <label className="text-sm">Sandbox mode</label>
+                </div>
+                <div className="flex gap-2">
+                  <Button type="submit" disabled={createMutation.isPending}>
+                    {createMutation.isPending ? "Creating..." : "Create"}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+        <EmptyState icon={Building2} title="No providers" description="Add your first payment provider to start routing." />
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Providers</h1>
-        <p className="text-muted-foreground">Payment provider network and performance</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Providers</h1>
+          <p className="text-muted-foreground">Payment provider network and performance</p>
+        </div>
+        <Button onClick={() => setShowCreate(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Create Provider
+        </Button>
       </div>
+
+      {showCreate && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Create New Provider</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate(formData); }} className="space-y-4">
+              <div>
+                <label className="text-sm font-medium">Name</label>
+                <Input
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Provider name"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Webhook URL (optional)</label>
+                <Input
+                  value={formData.webhook_url}
+                  onChange={(e) => setFormData({ ...formData, webhook_url: e.target.value })}
+                  placeholder="https://provider.com/webhook"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.is_sandbox}
+                  onChange={(e) => setFormData({ ...formData, is_sandbox: e.target.checked })}
+                  className="rounded"
+                />
+                <label className="text-sm">Sandbox mode</label>
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" disabled={createMutation.isPending}>
+                  {createMutation.isPending ? "Creating..." : "Create"}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {(data as Provider[]).map((provider, i) => (

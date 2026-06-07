@@ -1,19 +1,43 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { api } from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { formatCurrency, formatNumber } from "@/lib/utils";
-import { CreditCard, ArrowRight } from "lucide-react";
+import { CreditCard, ArrowRight, Plus } from "lucide-react";
 import { EmptyState, StatCardSkeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 
 export default function CasinosPage() {
+  const [showCreate, setShowCreate] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    webhook_url: "",
+    is_sandbox: false,
+  });
+
+  const queryClient = useQueryClient();
+
   const { data, isLoading } = useQuery({
     queryKey: ["casinos"],
     queryFn: () => api.getCasinos(),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: typeof formData) => api.createCasino(data),
+    onSuccess: () => {
+      toast.success("Casino created successfully");
+      queryClient.invalidateQueries({ queryKey: ["casinos"] });
+      setShowCreate(false);
+      setFormData({ name: "", webhook_url: "", is_sandbox: false });
+    },
+    onError: () => toast.error("Failed to create casino"),
   });
 
   if (isLoading) {
@@ -24,16 +48,127 @@ export default function CasinosPage() {
     );
   }
 
-  if (!data?.length) {
-    return <EmptyState icon={CreditCard} title="No casinos" description="Connect your first casino partner." />;
+  if (!Array.isArray(data) || data.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Casinos</h1>
+            <p className="text-muted-foreground">Connected casino partners and their performance</p>
+          </div>
+          <Button onClick={() => setShowCreate(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create Casino
+          </Button>
+        </div>
+        {showCreate && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Create New Casino</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate(formData); }} className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium">Name</label>
+                  <Input
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="Casino name"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Webhook URL (optional)</label>
+                  <Input
+                    value={formData.webhook_url}
+                    onChange={(e) => setFormData({ ...formData, webhook_url: e.target.value })}
+                    placeholder="https://casino.com/webhook"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_sandbox}
+                    onChange={(e) => setFormData({ ...formData, is_sandbox: e.target.checked })}
+                    className="rounded"
+                  />
+                  <label className="text-sm">Sandbox mode</label>
+                </div>
+                <div className="flex gap-2">
+                  <Button type="submit" disabled={createMutation.isPending}>
+                    {createMutation.isPending ? "Creating..." : "Create"}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+        <EmptyState icon={CreditCard} title="No casinos" description="Connect your first casino partner." />
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Casinos</h1>
-        <p className="text-muted-foreground">Connected casino partners and their performance</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Casinos</h1>
+          <p className="text-muted-foreground">Connected casino partners and their performance</p>
+        </div>
+        <Button onClick={() => setShowCreate(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Create Casino
+        </Button>
       </div>
+
+      {showCreate && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Create New Casino</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate(formData); }} className="space-y-4">
+              <div>
+                <label className="text-sm font-medium">Name</label>
+                <Input
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Casino name"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Webhook URL (optional)</label>
+                <Input
+                  value={formData.webhook_url}
+                  onChange={(e) => setFormData({ ...formData, webhook_url: e.target.value })}
+                  placeholder="https://casino.com/webhook"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.is_sandbox}
+                  onChange={(e) => setFormData({ ...formData, is_sandbox: e.target.checked })}
+                  className="rounded"
+                />
+                <label className="text-sm">Sandbox mode</label>
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" disabled={createMutation.isPending}>
+                  {createMutation.isPending ? "Creating..." : "Create"}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {data.map((casino, i) => (
