@@ -131,13 +131,22 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 
 	var requisite models.Requisite
 	var provider models.Provider
-	_ = s.db.Pool.QueryRow(ctx, `SELECT bank_name, holder_name, account_number FROM requisites WHERE id = $1`, routeResult.RequisiteID).
+	err = s.db.Pool.QueryRow(ctx, `SELECT bank_name, holder_name, account_number FROM requisites WHERE id = $1`, routeResult.RequisiteID).
 		Scan(&requisite.BankName, &requisite.HolderName, &requisite.AccountNumber)
-	_ = s.db.Pool.QueryRow(ctx, `SELECT id, name, base_url, api_key, secret_key FROM providers WHERE id = $1`, routeResult.ProviderID).
+	if err != nil {
+		return nil, fmt.Errorf("fetch requisite: %w", err)
+	}
+
+	err = s.db.Pool.QueryRow(ctx, `SELECT id, name, base_url, api_key, secret_key FROM providers WHERE id = $1`, routeResult.ProviderID).
 		Scan(&provider.ID, &provider.Name, &provider.BaseURL, &provider.APIKey, &provider.SecretKey)
+	if err != nil {
+		return nil, fmt.Errorf("fetch provider: %w", err)
+	}
 
 	// Call provider API if base_url is configured
 	if provider.BaseURL != nil && *provider.BaseURL != "" {
+		fmt.Printf("[DEBUG] Calling provider API: %s for transaction %s\n", *provider.BaseURL, txID)
+
 		providerClient := integrations.NewMajorPayClient(*provider.BaseURL, provider.APIKey, provider.SecretKey)
 
 		providerReq := integrations.MajorPayDepositRequest{
@@ -156,20 +165,30 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 			}(),
 		}
 
+		fmt.Printf("[DEBUG] Provider request: amount=%d, merchant_customer_id=%s\n", providerReq.Amount, providerReq.MerchantCustomerID)
+
 		providerResp, err := providerClient.CreateDeposit(ctx, providerReq)
 		if err != nil {
+			fmt.Printf("[ERROR] Provider API call failed: %v\n", err)
 			// Log error but don't fail the transaction
 			_, _ = s.db.Pool.Exec(ctx, `
 				INSERT INTO audit_logs (action, entity_type, entity_id, details)
 				VALUES ('PROVIDER_API_ERROR', 'transaction', $1, $2)
-			`, txID, fmt.Sprintf(`{"error":"%s"}`, err.Error()))
+			`, txID, fmt.Sprintf(`{"error":"%s","provider_url":"%s"}`, err.Error(), *provider.BaseURL))
 		} else {
+			fmt.Printf("[SUCCESS] Provider API response: transaction_id=%s\n", providerResp.TransactionID)
 			// Log successful provider call
 			_, _ = s.db.Pool.Exec(ctx, `
 				INSERT INTO audit_logs (action, entity_type, entity_id, details)
 				VALUES ('PROVIDER_API_CALLED', 'transaction', $1, $2)
-			`, txID, fmt.Sprintf(`{"provider_transaction_id":"%s"}`, providerResp.TransactionID))
+			`, txID, fmt.Sprintf(`{"provider_transaction_id":"%s","provider_url":"%s"}`, providerResp.TransactionID, *provider.BaseURL))
 		}
+	} else {
+		fmt.Printf("[WARN] Provider %s has no base_url configured, skipping API call\n", provider.Name)
+		_, _ = s.db.Pool.Exec(ctx, `
+			INSERT INTO audit_logs (action, entity_type, entity_id, details)
+			VALUES ('PROVIDER_NO_URL', 'transaction', $1, $2)
+		`, txID, fmt.Sprintf(`{"provider_id":"%s","provider_name":"%s"}`, provider.ID, provider.Name))
 	}
 
 	resp.Status = models.TxStatusWaitingPayment
