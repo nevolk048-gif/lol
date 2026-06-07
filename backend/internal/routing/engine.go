@@ -143,10 +143,10 @@ func (e *Engine) getMatchingRules(ctx context.Context, req RouteRequest) ([]rule
 func (e *Engine) getActiveProvider(ctx context.Context, id uuid.UUID, isSandbox bool) (*models.Provider, error) {
 	var p models.Provider
 	err := e.db.Pool.QueryRow(ctx, `
-		SELECT id, name, api_key, secret_key, webhook_url, ip_whitelist, status, is_sandbox, created_at, updated_at
+		SELECT id, name, api_key, secret_key, merchant_id, base_url, webhook_url, ip_whitelist, status, is_sandbox, created_at, updated_at
 		FROM providers WHERE id = $1 AND status = 'ACTIVE' AND is_sandbox = $2
 	`, id, isSandbox).Scan(
-		&p.ID, &p.Name, &p.APIKey, &p.SecretKey, &p.WebhookURL, &p.IPWhitelist,
+		&p.ID, &p.Name, &p.APIKey, &p.SecretKey, &p.MerchantID, &p.BaseURL, &p.WebhookURL, &p.IPWhitelist,
 		&p.Status, &p.IsSandbox, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
