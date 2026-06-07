@@ -1,13 +1,15 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { api } from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/widgets/stat-card";
 import { StatCardSkeleton } from "@/components/ui/skeleton";
-import { DollarSign, ArrowLeftRight, Clock, Activity } from "lucide-react";
+import { DollarSign, ArrowLeftRight, Clock, Activity, PlayCircle, PauseCircle, Ban } from "lucide-react";
+import { toast } from "sonner";
 
 export default function ProviderDetailPage() {
   const params = useParams();

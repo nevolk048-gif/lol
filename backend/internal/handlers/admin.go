@@ -530,14 +530,16 @@ func (h *AdminHandler) CreateTestTransaction(c *gin.Context) {
 		return
 	}
 
+	externalID := fmt.Sprintf("test_%s", uuid.New().String()[:8])
+
 	// Create transaction using the transactions service
 	tx, err := h.transactions.CreateDeposit(c.Request.Context(), req.CasinoID, transactions.CreateDepositRequest{
 		Amount:     req.Amount,
 		Currency:   req.Currency,
 		Country:    req.Country,
-		PlayerID:   req.PlayerID,
-		ExternalID: fmt.Sprintf("test_%s", uuid.New().String()[:8]),
-	})
+		PlayerID:   &req.PlayerID,
+		ExternalID: &externalID,
+	}, true) // true = is_sandbox
 	if err != nil {
 		c.Error(err)
 		response.InternalError(c, "failed to create test transaction: "+err.Error())

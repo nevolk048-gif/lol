@@ -117,6 +117,13 @@ class ApiClient {
     return this.request(`/providers/${id}`, { method: "DELETE" });
   }
 
+  updateProviderStatus(id: string, status: string) {
+    return this.request(`/providers/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+  }
+
   // Casinos
   getCasinos() {
     return this.request<import("@/types").Casino[]>("/casinos");
