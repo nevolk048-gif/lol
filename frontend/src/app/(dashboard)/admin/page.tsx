@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useI18n } from "@/hooks/use-i18n";
 import type { User, AuditLog } from "@/types";
 import { TestTransactionForm } from "@/components/test-transaction-form";
+import { CreateDepositForm } from "@/components/create-deposit-form";
 
 export default function AdminPage() {
   const { t } = useI18n();
@@ -157,7 +158,10 @@ export default function AdminPage() {
         </CardContent>
       </Card>
 
-      <TestTransactionForm />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <CreateDepositForm />
+        <TestTransactionForm />
+      </div>
     </div>
   );
 }
