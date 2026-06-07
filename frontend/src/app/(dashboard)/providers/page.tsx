@@ -37,11 +37,14 @@ export default function ProvidersPage() {
 
   const createMutation = useMutation({
     mutationFn: (data: typeof formData) => {
-      const payload: Record<string, unknown> = { name: data.name, is_sandbox: data.is_sandbox };
-      if (data.merchant_id) payload.merchant_id = data.merchant_id;
-      if (data.base_url) payload.base_url = data.base_url;
-      if (data.webhook_url) payload.webhook_url = data.webhook_url;
-      if (data.secret_key) payload.secret_key = data.secret_key;
+      const payload = {
+        name: data.name,
+        is_sandbox: data.is_sandbox,
+        ...(data.merchant_id && { merchant_id: data.merchant_id }),
+        ...(data.base_url && { base_url: data.base_url }),
+        ...(data.webhook_url && { webhook_url: data.webhook_url }),
+        ...(data.secret_key && { secret_key: data.secret_key }),
+      };
       return api.createProvider(payload);
     },
     onSuccess: () => {
