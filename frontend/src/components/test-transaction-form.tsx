@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Send } from "lucide-react";
+import { Send, Zap } from "lucide-react";
 
 export function TestTransactionForm() {
   const queryClient = useQueryClient();
@@ -47,12 +47,44 @@ export function TestTransactionForm() {
       return api.createTestTransaction(payload);
     },
     onSuccess: (transaction) => {
-      toast.success(`Transaction created: ${transaction.id}`);
+      toast.success(`Transaction created: ${transaction.id.slice(0, 8)}...`);
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      setFormData({ casino_id: "", provider_id: "", amount: "100", currency: "USD", country: "US", player_id: "" });
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to create transaction");
+    },
+  });
+
+  const createMultipleMutation = useMutation({
+    mutationFn: async ({ count, casino_id }: { count: number; casino_id: string }) => {
+      const promises = [];
+      const amounts = [50, 100, 150, 200, 250, 300, 500, 1000];
+      const countries = ["US", "RU", "KZ", "UA"];
+      const currencies = ["USD", "EUR", "RUB", "KZT"];
+
+      for (let i = 0; i < count; i++) {
+        const amount = amounts[Math.floor(Math.random() * amounts.length)];
+        const country = countries[Math.floor(Math.random() * countries.length)];
+        const currency = currencies[Math.floor(Math.random() * currencies.length)];
+
+        promises.push(
+          api.createTestTransaction({
+            casino_id,
+            amount,
+            currency,
+            country,
+            player_id: `player_${Math.random().toString(36).substr(2, 9)}`,
+          })
+        );
+      }
+      return Promise.all(promises);
+    },
+    onSuccess: (transactions) => {
+      toast.success(`${transactions.length} test transactions created!`);
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to create transactions");
     },
   });
 
@@ -65,15 +97,56 @@ export function TestTransactionForm() {
     createMutation.mutate(formData);
   };
 
+  const handleQuickTest = (count: number) => {
+    if (!formData.casino_id) {
+      toast.error("Please select a casino first");
+      return;
+    }
+    createMultipleMutation.mutate({ count, casino_id: formData.casino_id });
+  };
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Send className="h-5 w-5" />
-          Create Test Transaction
+          Create Test Transactions
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        <div className="flex gap-2 pb-4 border-b">
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => handleQuickTest(5)}
+            disabled={createMultipleMutation.isPending || !formData.casino_id}
+          >
+            <Zap className="h-3 w-3 mr-1" />
+            Generate 5
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => handleQuickTest(10)}
+            disabled={createMultipleMutation.isPending || !formData.casino_id}
+          >
+            <Zap className="h-3 w-3 mr-1" />
+            Generate 10
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => handleQuickTest(20)}
+            disabled={createMultipleMutation.isPending || !formData.casino_id}
+          >
+            <Zap className="h-3 w-3 mr-1" />
+            Generate 20
+          </Button>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -160,7 +233,7 @@ export function TestTransactionForm() {
           </div>
 
           <Button type="submit" disabled={createMutation.isPending} className="w-full">
-            {createMutation.isPending ? "Creating..." : "Create Test Transaction"}
+            {createMutation.isPending ? "Creating..." : "Create Single Transaction"}
           </Button>
         </form>
       </CardContent>

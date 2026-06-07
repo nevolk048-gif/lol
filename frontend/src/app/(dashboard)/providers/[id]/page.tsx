@@ -14,6 +14,7 @@ import { toast } from "sonner";
 export default function ProviderDetailPage() {
   const params = useParams();
   const id = params.id as string;
+  const queryClient = useQueryClient();
 
   const { data: provider, isLoading } = useQuery({
     queryKey: ["provider", id],
@@ -26,6 +27,16 @@ export default function ProviderDetailPage() {
     select: (data) => Array.isArray(data) ? data : [],
   });
 
+  const updateStatusMutation = useMutation({
+    mutationFn: (status: string) => api.updateProviderStatus(id, status),
+    onSuccess: () => {
+      toast.success("Provider status updated");
+      queryClient.invalidateQueries({ queryKey: ["provider", id] });
+      queryClient.invalidateQueries({ queryKey: ["providers"] });
+    },
+    onError: () => toast.error("Failed to update status"),
+  });
+
   if (isLoading) {
     return (
       <div className="grid gap-4 md:grid-cols-4">
@@ -36,13 +47,52 @@ export default function ProviderDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">{provider?.name}</h1>
-            <Badge status={provider?.status}>{provider?.status}</Badge>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold">{provider?.name}</h1>
+              <Badge status={provider?.status}>{provider?.status}</Badge>
+            </div>
+            <p className="text-muted-foreground font-mono text-sm mt-1">{provider?.api_key}</p>
           </div>
-          <p className="text-muted-foreground font-mono text-sm mt-1">{provider?.api_key}</p>
+        </div>
+        <div className="flex gap-2">
+          {provider?.status !== "ACTIVE" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => updateStatusMutation.mutate("ACTIVE")}
+              disabled={updateStatusMutation.isPending}
+            >
+              <PlayCircle className="h-4 w-4 mr-2" />
+              Activate
+            </Button>
+          )}
+          {provider?.status === "ACTIVE" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => updateStatusMutation.mutate("INACTIVE")}
+              disabled={updateStatusMutation.isPending}
+            >
+              <PauseCircle className="h-4 w-4 mr-2" />
+              Pause Traffic
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => {
+              if (confirm("Block this provider? It will stop receiving all traffic.")) {
+                updateStatusMutation.mutate("BLOCKED");
+              }
+            }}
+            disabled={updateStatusMutation.isPending || provider?.status === "BLOCKED"}
+          >
+            <Ban className="h-4 w-4 mr-2" />
+            Block
+          </Button>
         </div>
       </div>
 
