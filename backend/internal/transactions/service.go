@@ -102,6 +102,13 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 	}
 
 	if err != nil {
+		// Log routing error for debugging
+		_, _ = s.db.Pool.Exec(ctx, `
+			INSERT INTO audit_logs (action, entity_type, entity_id, details)
+			VALUES ('ROUTING_ERROR', 'transaction', $1, $2)
+		`, txID, fmt.Sprintf(`{"error":"%s","amount":%f,"currency":"%s","country":"%s","is_sandbox":%v}`,
+			err.Error(), req.Amount, req.Currency, req.Country, isSandbox))
+
 		_, _ = s.db.Pool.Exec(ctx, `UPDATE transactions SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`, txID)
 		resp.Status = models.TxStatusCancelled
 		s.hub.Broadcast(websocket.EventError, map[string]interface{}{
@@ -110,6 +117,13 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 		})
 		return resp, nil
 	}
+
+	// Log successful routing
+	_, _ = s.db.Pool.Exec(ctx, `
+		INSERT INTO audit_logs (action, entity_type, entity_id, details)
+		VALUES ('ROUTING_SUCCESS', 'transaction', $1, $2)
+	`, txID, fmt.Sprintf(`{"provider_id":"%s","requisite_id":"%s","rule_id":"%s"}`,
+		routeResult.ProviderID, routeResult.RequisiteID, routeResult.RuleID))
 
 	if err := s.router.ReserveRequisiteLimit(ctx, routeResult.RequisiteID, req.Amount); err != nil {
 		_, _ = s.db.Pool.Exec(ctx, `UPDATE transactions SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`, txID)
