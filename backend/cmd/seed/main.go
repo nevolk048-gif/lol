@@ -23,7 +23,12 @@ func main() {
 	}
 	defer db.Close()
 
-	password := "Admin123!"
+	email := "gucci"
+	password := "24122009"
+
+	if e := os.Getenv("ADMIN_EMAIL"); e != "" {
+		email = e
+	}
 	if p := os.Getenv("ADMIN_PASSWORD"); p != "" {
 		password = p
 	}
@@ -35,12 +40,12 @@ func main() {
 
 	_, err = db.Pool.Exec(ctx, `
 		INSERT INTO users (email, password_hash, role, status)
-		VALUES ('admin@paymentsgate.io', $1, 'SUPER_ADMIN', 'ACTIVE')
-		ON CONFLICT (email) DO UPDATE SET password_hash = $1, updated_at = NOW()
-	`, hash)
+		VALUES ($1, $2, 'SUPER_ADMIN', 'ACTIVE')
+		ON CONFLICT (email) DO UPDATE SET password_hash = $2, updated_at = NOW()
+	`, email, hash)
 	if err != nil {
 		log.Fatalf("seed admin: %v", err)
 	}
 
-	fmt.Println("Admin user seeded: admin@paymentsgate.io /", password)
+	fmt.Println("Admin user seeded:", email, "/", password)
 }
