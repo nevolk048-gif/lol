@@ -117,7 +117,6 @@ func (h *AdminHandler) RegisterRoutes(rg *gin.RouterGroup, auth gin.HandlerFunc)
 	// Debug endpoints (public for troubleshooting)
 	rg.GET("/debug/last-audit-logs", h.DebugLastAuditLogs)
 }
-}
 
 func (h *AdminHandler) Dashboard(c *gin.Context) {
 	var isSandbox *bool
