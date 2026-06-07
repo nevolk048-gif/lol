@@ -47,7 +47,8 @@ export function TestTransactionForm() {
       return api.createTestTransaction(payload);
     },
     onSuccess: (transaction) => {
-      toast.success(`Transaction created: ${transaction.id.slice(0, 8)}...`);
+      const txId = transaction?.transaction_id || transaction?.id;
+      toast.success(`Transaction created: ${txId ? String(txId).slice(0, 8) : 'success'}...`);
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
     },
     onError: (error: Error) => {
