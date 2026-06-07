@@ -1,0 +1,48 @@
+{
+  "dashboard": "Dashboard",
+  "casinos": "Casinos",
+  "providers": "Providers",
+  "requisites": "Requisites",
+  "transactions": "Transactions",
+  "routing": "Routing",
+  "sandbox": "Sandbox",
+  "admin": "Admin",
+  "finance": "Finance",
+  "monitoring": "Monitoring",
+  "integrationLogs": "Integration Logs",
+
+  "createCasino": "Create Casino",
+  "createProvider": "Create Provider",
+  "createRequisite": "Create Requisite",
+  "createUser": "Create User",
+
+  "name": "Name",
+  "email": "Email",
+  "password": "Password",
+  "role": "Role",
+  "status": "Status",
+  "created": "Created",
+  "webhookUrl": "Webhook URL",
+  "sandboxMode": "Sandbox mode",
+  "create": "Create",
+  "cancel": "Cancel",
+  "creating": "Creating...",
+
+  "bankName": "Bank Name",
+  "holderName": "Holder Name",
+  "accountNumber": "Account Number",
+  "currency": "Currency",
+  "country": "Country",
+  "dailyLimit": "Daily Limit",
+  "provider": "Provider",
+  "selectProvider": "Select provider",
+
+  "userManagement": "User management and audit logs",
+  "noCasinos": "No casinos",
+  "noProviders": "No providers",
+  "noRequisites": "No requisites",
+
+  "signIn": "Sign in",
+  "signOut": "Sign out",
+  "enterCredentials": "Enter your credentials to access the dashboard"
+}

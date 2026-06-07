@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/stores/auth-store";
 import { useThemeStore } from "@/stores/theme-store";
 import { CommandPalette } from "./command-palette";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 export function Header() {
   const router = useRouter();
@@ -52,6 +53,7 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-2">
+          <LanguageSwitcher />
           <Button variant="ghost" size="icon" onClick={toggleTheme}>
             {resolvedTheme === "dark" ? (
               <Sun className="h-4 w-4" />

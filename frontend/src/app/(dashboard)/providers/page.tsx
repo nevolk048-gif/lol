@@ -19,7 +19,10 @@ export default function ProvidersPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
+    merchant_id: "",
+    base_url: "",
     webhook_url: "",
+    secret_key: "",
     is_sandbox: false,
   });
 
@@ -36,7 +39,7 @@ export default function ProvidersPage() {
       toast.success("Provider created successfully");
       queryClient.invalidateQueries({ queryKey: ["providers"] });
       setShowCreate(false);
-      setFormData({ name: "", webhook_url: "", is_sandbox: false });
+      setFormData({ name: "", merchant_id: "", base_url: "", webhook_url: "", secret_key: "", is_sandbox: false });
     },
     onError: () => toast.error("Failed to create provider"),
   });
@@ -133,20 +136,50 @@ export default function ProvidersPage() {
           <CardContent>
             <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate(formData); }} className="space-y-4">
               <div>
-                <label className="text-sm font-medium">Name</label>
+                <label className="text-sm font-medium">Provider Name</label>
                 <Input
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Provider name"
+                  placeholder="MajorPay"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Merchant ID</label>
+                  <Input
+                    value={formData.merchant_id}
+                    onChange={(e) => setFormData({ ...formData, merchant_id: e.target.value })}
+                    placeholder="shop_c5cf9b51..."
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Base URL</label>
+                  <Input
+                    value={formData.base_url}
+                    onChange={(e) => setFormData({ ...formData, base_url: e.target.value })}
+                    placeholder="https://api.majorpay.io/api"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Secret Key</label>
+                <Input
+                  type="password"
+                  value={formData.secret_key}
+                  onChange={(e) => setFormData({ ...formData, secret_key: e.target.value })}
+                  placeholder="sk_2d1c7f5807..."
                   required
                 />
               </div>
               <div>
-                <label className="text-sm font-medium">Webhook URL (optional)</label>
+                <label className="text-sm font-medium">Webhook URL</label>
                 <Input
                   value={formData.webhook_url}
                   onChange={(e) => setFormData({ ...formData, webhook_url: e.target.value })}
-                  placeholder="https://provider.com/webhook"
+                  placeholder="https://your-domain.com/webhook"
                 />
               </div>
               <div className="flex items-center gap-2">

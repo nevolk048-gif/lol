@@ -1,0 +1,48 @@
+{
+  "dashboard": "Панель управления",
+  "casinos": "Казино",
+  "providers": "Провайдеры",
+  "requisites": "Реквизиты",
+  "transactions": "Транзакции",
+  "routing": "Маршрутизация",
+  "sandbox": "Песочница",
+  "admin": "Администрирование",
+  "finance": "Финансы",
+  "monitoring": "Мониторинг",
+  "integrationLogs": "Логи интеграций",
+
+  "createCasino": "Создать казино",
+  "createProvider": "Создать провайдера",
+  "createRequisite": "Создать реквизит",
+  "createUser": "Создать пользователя",
+
+  "name": "Название",
+  "email": "Email",
+  "password": "Пароль",
+  "role": "Роль",
+  "status": "Статус",
+  "created": "Создан",
+  "webhookUrl": "URL вебхука",
+  "sandboxMode": "Режим песочницы",
+  "create": "Создать",
+  "cancel": "Отмена",
+  "creating": "Создание...",
+
+  "bankName": "Название банка",
+  "holderName": "Владелец счёта",
+  "accountNumber": "Номер счёта",
+  "currency": "Валюта",
+  "country": "Страна",
+  "dailyLimit": "Дневной лимит",
+  "provider": "Провайдер",
+  "selectProvider": "Выберите провайдера",
+
+  "userManagement": "Управление пользователями и логи аудита",
+  "noCasinos": "Нет казино",
+  "noProviders": "Нет провайдеров",
+  "noRequisites": "Нет реквизитов",
+
+  "signIn": "Войти",
+  "signOut": "Выйти",
+  "enterCredentials": "Введите учётные данные для доступа к панели"
+}
