@@ -32,6 +32,7 @@ export default function CasinosPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["casinos"],
     queryFn: () => api.getCasinos(),
+    select: (data) => Array.isArray(data) ? data : [],
   });
 
   const createMutation = useMutation({

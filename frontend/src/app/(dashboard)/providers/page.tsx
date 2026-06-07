@@ -33,6 +33,7 @@ export default function ProvidersPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["providers"],
     queryFn: () => api.getProviders(),
+    select: (data) => Array.isArray(data) ? data : [],
   });
 
   const createMutation = useMutation({
