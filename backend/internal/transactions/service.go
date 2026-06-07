@@ -10,6 +10,7 @@ import (
 	"github.com/paymentsgate/paymentsgate/internal/routing"
 	"github.com/paymentsgate/paymentsgate/internal/websocket"
 	"github.com/paymentsgate/paymentsgate/pkg/database"
+	"github.com/paymentsgate/paymentsgate/pkg/integrations"
 	"github.com/paymentsgate/paymentsgate/pkg/models"
 )
 
@@ -132,8 +133,44 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 	var provider models.Provider
 	_ = s.db.Pool.QueryRow(ctx, `SELECT bank_name, holder_name, account_number FROM requisites WHERE id = $1`, routeResult.RequisiteID).
 		Scan(&requisite.BankName, &requisite.HolderName, &requisite.AccountNumber)
-	_ = s.db.Pool.QueryRow(ctx, `SELECT id, name FROM providers WHERE id = $1`, routeResult.ProviderID).
-		Scan(&provider.ID, &provider.Name)
+	_ = s.db.Pool.QueryRow(ctx, `SELECT id, name, base_url, api_key, secret_key FROM providers WHERE id = $1`, routeResult.ProviderID).
+		Scan(&provider.ID, &provider.Name, &provider.BaseURL, &provider.APIKey, &provider.SecretKey)
+
+	// Call provider API if base_url is configured
+	if provider.BaseURL != nil && *provider.BaseURL != "" {
+		providerClient := integrations.NewMajorPayClient(*provider.BaseURL, provider.APIKey, provider.SecretKey)
+
+		providerReq := integrations.MajorPayDepositRequest{
+			Amount:             int(req.Amount * 100), // Convert to kopecks
+			MerchantCustomerID: func() string {
+				if req.MerchantCustomerID != nil {
+					return *req.MerchantCustomerID
+				}
+				return fmt.Sprintf("customer_%s", txID.String()[:8])
+			}(),
+			PaymentMethod: func() string {
+				if req.PaymentMethod != nil {
+					return *req.PaymentMethod
+				}
+				return "auto"
+			}(),
+		}
+
+		providerResp, err := providerClient.CreateDeposit(ctx, providerReq)
+		if err != nil {
+			// Log error but don't fail the transaction
+			_, _ = s.db.Pool.Exec(ctx, `
+				INSERT INTO audit_logs (action, entity_type, entity_id, details)
+				VALUES ('PROVIDER_API_ERROR', 'transaction', $1, $2)
+			`, txID, fmt.Sprintf(`{"error":"%s"}`, err.Error()))
+		} else {
+			// Log successful provider call
+			_, _ = s.db.Pool.Exec(ctx, `
+				INSERT INTO audit_logs (action, entity_type, entity_id, details)
+				VALUES ('PROVIDER_API_CALLED', 'transaction', $1, $2)
+			`, txID, fmt.Sprintf(`{"provider_transaction_id":"%s"}`, providerResp.TransactionID))
+		}
+	}
 
 	resp.Status = models.TxStatusWaitingPayment
 	resp.Requisite = &RequisiteInfo{
