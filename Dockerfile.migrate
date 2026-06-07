@@ -1,0 +1,10 @@
+FROM postgres:16-alpine
+
+WORKDIR /app
+
+COPY backend/migrations ./migrations
+COPY backend/migrate.sh ./migrate.sh
+
+RUN chmod +x ./migrate.sh
+
+CMD ["./migrate.sh"]
