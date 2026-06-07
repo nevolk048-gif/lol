@@ -35,11 +35,40 @@ func (h *Handler) CreateDeposit(c *gin.Context) {
 		return
 	}
 
+	// Store idempotency key if provided
+	idempotencyKey := c.GetHeader("Idempotency-Key")
+	if idempotencyKey != "" {
+		// Check if this key was already processed
+		var existingTxID uuid.UUID
+		err := h.db.Pool.QueryRow(c.Request.Context(), `
+			SELECT id FROM transactions
+			WHERE idempotency_key = $1 AND casino_id = $2
+			LIMIT 1
+		`, idempotencyKey, casinoID).Scan(&existingTxID)
+
+		if err == nil {
+			// Already processed, return existing transaction
+			tx, _ := h.service.GetByID(c.Request.Context(), existingTxID)
+			if tx != nil {
+				response.OK(c, tx)
+				return
+			}
+		}
+	}
+
 	result, err := h.service.CreateDeposit(c.Request.Context(), casinoID, req, isSandbox.(bool))
 	if err != nil {
 		response.InternalError(c, "failed to create deposit")
 		return
 	}
+
+	// Store idempotency key after successful creation
+	if idempotencyKey != "" {
+		_, _ = h.db.Pool.Exec(c.Request.Context(), `
+			UPDATE transactions SET idempotency_key = $1 WHERE id = $2
+		`, idempotencyKey, result.TransactionID)
+	}
+
 	response.Created(c, result)
 }
 

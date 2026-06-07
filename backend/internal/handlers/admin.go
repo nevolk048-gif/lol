@@ -102,6 +102,8 @@ func (h *AdminHandler) RegisterRoutes(rg *gin.RouterGroup, auth gin.HandlerFunc)
 			sandboxGroup.POST("/generate-traffic", h.SandboxGenerateTraffic)
 			sandboxGroup.POST("/generate-stats", h.SandboxGenerateStats)
 		}
+
+		api.POST("/migrate", middleware.RequireRoles(models.RoleSuperAdmin), h.RunMigration)
 	}
 }
 

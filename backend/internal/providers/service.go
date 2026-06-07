@@ -106,9 +106,6 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*models.Provid
 	`, req.Name, apiKey, secretKey, req.MerchantID, req.BaseURL, req.WebhookURL, req.IsSandbox).Scan(
 		&p.ID, &p.Name, &p.APIKey, &p.SecretKey, &p.MerchantID, &p.BaseURL, &p.WebhookURL, &p.IPWhitelist, &p.Status, &p.IsSandbox, &p.CreatedAt, &p.UpdatedAt,
 	)
-		&p.ID, &p.Name, &p.APIKey, &p.SecretKey, &p.WebhookURL, &p.IPWhitelist,
-		&p.Status, &p.IsSandbox, &p.CreatedAt, &p.UpdatedAt,
-	)
 	if err != nil {
 		return nil, fmt.Errorf("create provider: %w", err)
 	}

@@ -20,24 +20,26 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 
-const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Transactions", href: "/transactions", icon: ArrowLeftRight },
-  { name: "Providers", href: "/providers", icon: Building2 },
-  { name: "Casinos", href: "/casinos", icon: CreditCard },
-  { name: "Requisites", href: "/requisites", icon: CreditCard },
-  { name: "Routing", href: "/routing", icon: Route },
-  { name: "Finance", href: "/finance", icon: DollarSign },
-  { name: "Monitoring", href: "/monitoring", icon: Activity },
-  { name: "Integration Logs", href: "/integration-logs", icon: FileText },
-  { name: "Admin", href: "/admin", icon: Users },
-  { name: "Sandbox", href: "/sandbox", icon: FlaskConical },
+const navigationKeys = [
+  { key: "dashboard", href: "/", icon: LayoutDashboard },
+  { key: "transactions", href: "/transactions", icon: ArrowLeftRight },
+  { key: "providers", href: "/providers", icon: Building2 },
+  { key: "casinos", href: "/casinos", icon: CreditCard },
+  { key: "requisites", href: "/requisites", icon: CreditCard },
+  { key: "routing", href: "/routing", icon: Route },
+  { key: "finance", href: "/finance", icon: DollarSign },
+  { key: "monitoring", href: "/monitoring", icon: Activity },
+  { key: "integrationLogs", href: "/integration-logs", icon: FileText },
+  { key: "admin", href: "/admin", icon: Users },
+  { key: "sandbox", href: "/sandbox", icon: FlaskConical },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const { t } = useI18n();
 
   return (
     <motion.aside
@@ -53,13 +55,13 @@ export function Sidebar() {
         {!collapsed && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <p className="text-sm font-bold tracking-tight">PaymentsGate</p>
-            <p className="text-[10px] text-muted-foreground">Enterprise Aggregator</p>
+            <p className="text-[10px] text-muted-foreground">{t("enterpriseAggregator")}</p>
           </motion.div>
         )}
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-        {navigation.map((item) => {
+        {navigationKeys.map((item) => {
           const isActive =
             item.href === "/"
               ? pathname === "/"
@@ -76,7 +78,7 @@ export function Sidebar() {
               )}
             >
               <item.icon className="h-4 w-4 shrink-0" />
-              {!collapsed && <span>{item.name}</span>}
+              {!collapsed && <span>{t(item.key)}</span>}
             </Link>
           );
         })}

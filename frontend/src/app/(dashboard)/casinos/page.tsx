@@ -13,8 +13,10 @@ import { formatCurrency, formatNumber } from "@/lib/utils";
 import { CreditCard, ArrowRight, Plus } from "lucide-react";
 import { EmptyState, StatCardSkeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { useI18n } from "@/hooks/use-i18n";
 
 export default function CasinosPage() {
+  const { t } = useI18n();
   const [showCreate, setShowCreate] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -33,14 +35,21 @@ export default function CasinosPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: typeof formData) => api.createCasino(data),
+    mutationFn: (data: typeof formData) => {
+      const payload: any = { name: data.name, is_sandbox: data.is_sandbox };
+      if (data.merchant_id) payload.merchant_id = data.merchant_id;
+      if (data.base_url) payload.base_url = data.base_url;
+      if (data.webhook_url) payload.webhook_url = data.webhook_url;
+      if (data.secret_key) payload.secret_key = data.secret_key;
+      return api.createCasino(payload);
+    },
     onSuccess: () => {
-      toast.success("Casino created successfully");
+      toast.success(t("casinoCreated"));
       queryClient.invalidateQueries({ queryKey: ["casinos"] });
       setShowCreate(false);
       setFormData({ name: "", merchant_id: "", base_url: "", webhook_url: "", secret_key: "", is_sandbox: false });
     },
-    onError: () => toast.error("Failed to create casino"),
+    onError: () => toast.error(t("failedToCreate")),
   });
 
   if (isLoading) {
@@ -51,95 +60,95 @@ export default function CasinosPage() {
     );
   }
 
+  const renderCreateForm = () => (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("createCasino")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate(formData); }} className="space-y-4">
+          <div>
+            <label className="text-sm font-medium">{t("name")} *</label>
+            <Input
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="Royal Casino"
+              required
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium">Merchant ID</label>
+              <Input
+                value={formData.merchant_id}
+                onChange={(e) => setFormData({ ...formData, merchant_id: e.target.value })}
+                placeholder="casino_abc123..."
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Base URL</label>
+              <Input
+                value={formData.base_url}
+                onChange={(e) => setFormData({ ...formData, base_url: e.target.value })}
+                placeholder="https://api.casino.com"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium">Secret Key</label>
+            <Input
+              type="password"
+              value={formData.secret_key}
+              onChange={(e) => setFormData({ ...formData, secret_key: e.target.value })}
+              placeholder="sk_casino_secret..."
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">{t("webhookUrl")}</label>
+            <Input
+              value={formData.webhook_url}
+              onChange={(e) => setFormData({ ...formData, webhook_url: e.target.value })}
+              placeholder="https://casino.com/webhook"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="sandbox-casino"
+              checked={formData.is_sandbox}
+              onChange={(e) => setFormData({ ...formData, is_sandbox: e.target.checked })}
+              className="rounded"
+            />
+            <label htmlFor="sandbox-casino" className="text-sm">{t("sandboxMode")}</label>
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" disabled={createMutation.isPending}>
+              {createMutation.isPending ? t("creating") : t("create")}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
+              {t("cancel")}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  );
+
   if (!Array.isArray(data) || data.length === 0) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Casinos</h1>
+            <h1 className="text-2xl font-bold">{t("casinos")}</h1>
             <p className="text-muted-foreground">Connected casino partners and their performance</p>
           </div>
           <Button onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4 mr-2" />
-            Create Casino
+            {t("createCasino")}
           </Button>
         </div>
-        {showCreate && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Create New Casino</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate(formData); }} className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium">Casino Name</label>
-                  <Input
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Royal Casino"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium">Merchant ID</label>
-                    <Input
-                      value={formData.merchant_id}
-                      onChange={(e) => setFormData({ ...formData, merchant_id: e.target.value })}
-                      placeholder="casino_abc123..."
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Base URL</label>
-                    <Input
-                      value={formData.base_url}
-                      onChange={(e) => setFormData({ ...formData, base_url: e.target.value })}
-                      placeholder="https://api.casino.com"
-                      required
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Secret Key</label>
-                  <Input
-                    type="password"
-                    value={formData.secret_key}
-                    onChange={(e) => setFormData({ ...formData, secret_key: e.target.value })}
-                    placeholder="sk_casino_secret..."
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Webhook URL</label>
-                  <Input
-                    value={formData.webhook_url}
-                    onChange={(e) => setFormData({ ...formData, webhook_url: e.target.value })}
-                    placeholder="https://casino.com/webhook"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={formData.is_sandbox}
-                    onChange={(e) => setFormData({ ...formData, is_sandbox: e.target.checked })}
-                    className="rounded"
-                  />
-                  <label className="text-sm">Sandbox mode</label>
-                </div>
-                <div className="flex gap-2">
-                  <Button type="submit" disabled={createMutation.isPending}>
-                    {createMutation.isPending ? "Creating..." : "Create"}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        )}
-        <EmptyState icon={CreditCard} title="No casinos" description="Connect your first casino partner." />
+        {showCreate && renderCreateForm()}
+        <EmptyState icon={CreditCard} title={t("noCasinos")} description="Connect your first casino partner." />
       </div>
     );
   }
@@ -148,60 +157,16 @@ export default function CasinosPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Casinos</h1>
+          <h1 className="text-2xl font-bold">{t("casinos")}</h1>
           <p className="text-muted-foreground">Connected casino partners and their performance</p>
         </div>
         <Button onClick={() => setShowCreate(true)}>
           <Plus className="h-4 w-4 mr-2" />
-          Create Casino
+          {t("createCasino")}
         </Button>
       </div>
 
-      {showCreate && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Create New Casino</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate(formData); }} className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">Name</label>
-                <Input
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Casino name"
-                  required
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Webhook URL (optional)</label>
-                <Input
-                  value={formData.webhook_url}
-                  onChange={(e) => setFormData({ ...formData, webhook_url: e.target.value })}
-                  placeholder="https://casino.com/webhook"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={formData.is_sandbox}
-                  onChange={(e) => setFormData({ ...formData, is_sandbox: e.target.checked })}
-                  className="rounded"
-                />
-                <label className="text-sm">Sandbox mode</label>
-              </div>
-              <div className="flex gap-2">
-                <Button type="submit" disabled={createMutation.isPending}>
-                  {createMutation.isPending ? "Creating..." : "Create"}
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
+      {showCreate && renderCreateForm()}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {data.map((casino, i) => (
@@ -210,7 +175,7 @@ export default function CasinosPage() {
               <Card className="hover:shadow-lg transition-all hover:border-primary/30 cursor-pointer group">
                 <CardHeader className="flex flex-row items-start justify-between">
                   <CardTitle>{casino.name}</CardTitle>
-                  <Badge status={casino.status}>{casino.status}</Badge>
+                  <Badge status={casino.status}>{t(casino.status)}</Badge>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 gap-4 text-sm mb-4">
@@ -219,7 +184,7 @@ export default function CasinosPage() {
                       <p className="font-semibold">{formatCurrency(casino.turnover ?? 0)}</p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Transactions</p>
+                      <p className="text-muted-foreground">{t("transactions")}</p>
                       <p className="font-semibold">{formatNumber(casino.transaction_count ?? 0)}</p>
                     </div>
                   </div>

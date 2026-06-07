@@ -27,10 +27,13 @@ func NewEngine(db *database.DB) *Engine {
 }
 
 type RouteRequest struct {
-	Amount    float64
-	Currency  string
-	Country   string
-	IsSandbox bool
+	Amount              float64
+	Currency            string
+	Country             string
+	IsSandbox           bool
+	MerchantCustomerID  *string // For Payer Affinity
+	PaymentMethod       *string // Payment method hint
+	CasinoID            uuid.UUID
 }
 
 type RouteResult struct {
@@ -40,6 +43,20 @@ type RouteResult struct {
 }
 
 func (e *Engine) Route(ctx context.Context, req RouteRequest) (*RouteResult, error) {
+	// Step 1: Try Payer Affinity - find requisite used successfully by this customer before
+	if req.MerchantCustomerID != nil && *req.MerchantCustomerID != "" {
+		requisite, err := e.getAffinityRequisite(ctx, *req.MerchantCustomerID, req.CasinoID, req.Amount, req.Currency, req.Country, req.IsSandbox)
+		if err == nil && requisite != nil {
+			// Found preferred requisite, use its provider
+			return &RouteResult{
+				ProviderID:  requisite.ProviderID,
+				RequisiteID: requisite.ID,
+				RuleID:      uuid.Nil, // Affinity-based, no rule
+			}, nil
+		}
+	}
+
+	// Step 2: Standard Smart Routing
 	rules, err := e.getMatchingRules(ctx, req)
 	if err != nil {
 		return nil, err
@@ -214,4 +231,56 @@ func (e *Engine) ReserveRequisiteLimit(ctx context.Context, requisiteID uuid.UUI
 		return ErrNoRequisiteAvailable
 	}
 	return nil
+}
+
+// getAffinityRequisite implements Payer Affinity: returns requisite used successfully by customer before
+func (e *Engine) getAffinityRequisite(ctx context.Context, merchantCustomerID string, casinoID uuid.UUID, amount float64, currency, country string, isSandbox bool) (*models.Requisite, error) {
+	var r models.Requisite
+	err := e.db.Pool.QueryRow(ctx, `
+		SELECT r.id, r.provider_id, r.bank_name, r.holder_name, r.account_number,
+		       r.currency, r.country, r.daily_limit, r.used_limit, r.status,
+		       r.is_sandbox, r.created_at, r.updated_at
+		FROM requisites r
+		INNER JOIN customer_requisite_history crh
+		  ON crh.requisite_id = r.id
+		  AND crh.merchant_customer_id = $1
+		  AND crh.casino_id = $2
+		WHERE r.status = 'ACTIVE'
+		  AND r.is_sandbox = $3
+		  AND r.currency = $4
+		  AND r.country = $5
+		  AND (r.daily_limit - r.used_limit) >= $6
+		ORDER BY crh.last_success_at DESC, crh.success_count DESC
+		LIMIT 1
+	`, merchantCustomerID, casinoID, isSandbox, currency, country, amount).Scan(
+		&r.ID, &r.ProviderID, &r.BankName, &r.HolderName, &r.AccountNumber,
+		&r.Currency, &r.Country, &r.DailyLimit, &r.UsedLimit, &r.Status,
+		&r.IsSandbox, &r.CreatedAt, &r.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNoRequisiteAvailable
+		}
+		return nil, err
+	}
+	return &r, nil
+}
+
+// RecordSuccessfulPayment records successful customer-requisite pair for future Payer Affinity
+func (e *Engine) RecordSuccessfulPayment(ctx context.Context, merchantCustomerID string, casinoID, requisiteID uuid.UUID) error {
+	if merchantCustomerID == "" {
+		return nil // No customer ID, skip affinity tracking
+	}
+
+	_, err := e.db.Pool.Exec(ctx, `
+		INSERT INTO customer_requisite_history
+		  (merchant_customer_id, requisite_id, casino_id, last_success_at, success_count)
+		VALUES ($1, $2, $3, NOW(), 1)
+		ON CONFLICT (merchant_customer_id, requisite_id, casino_id)
+		DO UPDATE SET
+		  last_success_at = NOW(),
+		  success_count = customer_requisite_history.success_count + 1,
+		  updated_at = NOW()
+	`, merchantCustomerID, requisiteID, casinoID)
+	return err
 }

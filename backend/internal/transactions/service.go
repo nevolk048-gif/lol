@@ -24,11 +24,13 @@ func NewService(db *database.DB, router *routing.Engine, hub *websocket.Hub) *Se
 }
 
 type CreateDepositRequest struct {
-	Amount     float64 `json:"amount" binding:"required,gt=0"`
-	Currency   string  `json:"currency" binding:"required,len=3"`
-	Country    string  `json:"country" binding:"required,len=2"`
-	ExternalID *string `json:"external_id"`
-	PlayerID   *string `json:"player_id"`
+	Amount              float64 `json:"amount" binding:"required,gt=0"`
+	Currency            string  `json:"currency" binding:"required,len=3"`
+	Country             string  `json:"country" binding:"required,len=2"`
+	ExternalID          *string `json:"external_id"`
+	PlayerID            *string `json:"player_id"`
+	MerchantCustomerID  *string `json:"merchant_customer_id"` // For Payer Affinity
+	PaymentMethod       *string `json:"payment_method"`       // auto, card, sbp, etc.
 }
 
 type DepositResponse struct {
@@ -68,9 +70,9 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 	txID := uuid.New()
 
 	_, err := s.db.Pool.Exec(ctx, `
-		INSERT INTO transactions (id, external_id, casino_id, amount, currency, country, status, player_id, is_sandbox)
-		VALUES ($1, $2, $3, $4, $5, $6, 'NEW', $7, $8)
-	`, txID, req.ExternalID, casinoID, req.Amount, req.Currency, req.Country, req.PlayerID, isSandbox)
+		INSERT INTO transactions (id, external_id, casino_id, amount, currency, country, status, player_id, is_sandbox, merchant_customer_id, payment_method)
+		VALUES ($1, $2, $3, $4, $5, $6, 'NEW', $7, $8, $9, $10)
+	`, txID, req.ExternalID, casinoID, req.Amount, req.Currency, req.Country, req.PlayerID, isSandbox, req.MerchantCustomerID, req.PaymentMethod)
 	if err != nil {
 		return nil, fmt.Errorf("create transaction: %w", err)
 	}
@@ -84,10 +86,13 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 	})
 
 	routeResult, err := s.router.Route(ctx, routing.RouteRequest{
-		Amount:    req.Amount,
-		Currency:  req.Currency,
-		Country:   req.Country,
-		IsSandbox: isSandbox,
+		Amount:             req.Amount,
+		Currency:           req.Currency,
+		Country:            req.Country,
+		IsSandbox:          isSandbox,
+		MerchantCustomerID: req.MerchantCustomerID,
+		PaymentMethod:      req.PaymentMethod,
+		CasinoID:           casinoID,
 	})
 
 	resp := &DepositResponse{
@@ -256,6 +261,21 @@ func (s *Service) UpdateStatus(ctx context.Context, id uuid.UUID, status models.
 	}
 	if tag.RowsAffected() == 0 {
 		return pgx.ErrNoRows
+	}
+
+	// Record successful payment for Payer Affinity
+	if status == models.TxStatusPaid {
+		var merchantCustomerID *string
+		var casinoID uuid.UUID
+		var requisiteID *uuid.UUID
+		_ = s.db.Pool.QueryRow(ctx, `
+			SELECT merchant_customer_id, casino_id, requisite_id
+			FROM transactions WHERE id = $1
+		`, id).Scan(&merchantCustomerID, &casinoID, &requisiteID)
+
+		if merchantCustomerID != nil && *merchantCustomerID != "" && requisiteID != nil {
+			_ = s.router.RecordSuccessfulPayment(ctx, *merchantCustomerID, casinoID, *requisiteID)
+		}
 	}
 
 	s.hub.Broadcast(websocket.EventStatusChange, map[string]interface{}{

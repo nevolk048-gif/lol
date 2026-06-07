@@ -8,11 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuthStore } from "@/stores/auth-store";
+import { useI18n } from "@/hooks/use-i18n";
 import { toast } from "sonner";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login, isAuthenticated } = useAuthStore();
+  const { t } = useI18n();
   const [email, setEmail] = useState("admin@paymentsgate.io");
   const [password, setPassword] = useState("Admin123!");
   const [showPassword, setShowPassword] = useState(false);
@@ -28,10 +30,10 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email, password);
-      toast.success("Welcome back!");
+      toast.success(t("welcomeBack"));
       router.push("/");
     } catch {
-      toast.error("Invalid credentials");
+      toast.error(t("invalidCredentials"));
     } finally {
       setLoading(false);
     }
@@ -48,20 +50,20 @@ export default function LoginPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold">PaymentsGate</h1>
-              <p className="text-muted-foreground">Enterprise Payment Aggregator</p>
+              <p className="text-muted-foreground">{t("enterpriseAggregator")}</p>
             </div>
           </div>
           <h2 className="text-4xl font-bold leading-tight mb-4">
-            Route casino deposits<br />with precision
+            {t("routeCasinoDeposits")}
           </h2>
           <p className="text-lg text-muted-foreground max-w-md">
-            Automatic provider routing, real-time monitoring, and enterprise-grade security for high-volume payment operations.
+            {t("automaticRouting")}
           </p>
           <div className="mt-12 grid grid-cols-3 gap-6">
             {[
-              { label: "Uptime", value: "99.99%" },
-              { label: "Providers", value: "50+" },
-              { label: "Daily Volume", value: "$12M+" },
+              { label: t("uptime"), value: "99.99%" },
+              { label: t("providers"), value: "50+" },
+              { label: t("dailyVolume"), value: "$12M+" },
             ].map((stat) => (
               <div key={stat.label}>
                 <p className="text-2xl font-bold text-primary">{stat.value}</p>
@@ -80,13 +82,13 @@ export default function LoginPage() {
         >
           <Card className="border-border/50 shadow-xl">
             <CardHeader className="text-center">
-              <CardTitle className="text-2xl">Sign in</CardTitle>
-              <CardDescription>Enter your credentials to access the dashboard</CardDescription>
+              <CardTitle className="text-2xl">{t("signIn")}</CardTitle>
+              <CardDescription>{t("enterCredentials")}</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Email</label>
+                  <label className="text-sm font-medium">{t("email")}</label>
                   <Input
                     type="text"
                     value={email}
@@ -96,7 +98,7 @@ export default function LoginPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Password</label>
+                  <label className="text-sm font-medium">{t("password")}</label>
                   <div className="relative">
                     <Input
                       type={showPassword ? "text" : "password"}
@@ -115,11 +117,11 @@ export default function LoginPage() {
                   </div>
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Signing in..." : "Sign in"}
+                  {loading ? t("signingIn") : t("signIn")}
                 </Button>
               </form>
               <p className="mt-4 text-center text-xs text-muted-foreground">
-                Demo: admin@paymentsgate.io / Admin123!
+                {t("demoCredentials")}
               </p>
             </CardContent>
           </Card>
