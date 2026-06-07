@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"io"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -102,7 +103,7 @@ func ProviderAuth(db *database.DB) gin.HandlerFunc {
 		if signature != "" {
 			body, _ := c.GetRawData()
 			if len(body) > 0 {
-				c.Request.Body = gin.NopCloser(strings.NewReader(string(body)))
+				c.Request.Body = io.NopCloser(strings.NewReader(string(body)))
 				if !crypto.VerifyHMAC(string(body), signature, secretKey) {
 					response.Unauthorized(c, "invalid signature")
 					c.Abort()
