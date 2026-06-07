@@ -103,7 +103,9 @@ func (h *AdminHandler) RegisterRoutes(rg *gin.RouterGroup, auth gin.HandlerFunc)
 			sandboxGroup.POST("/generate-stats", h.SandboxGenerateStats)
 		}
 
-		api.POST("/migrate", middleware.RequireRoles(models.RoleSuperAdmin), h.RunMigration)
+		api.POST("/migrate", middleware.RequireRoles(models.RoleSuperAdmin), func(c *gin.Context) {
+			response.OK(c, gin.H{"message": "migrations run via Railway"})
+		})
 	}
 }
 

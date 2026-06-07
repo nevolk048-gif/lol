@@ -20,7 +20,8 @@ export const useI18n = create<I18nState>()(
       setLocale: (locale) => set({ locale }),
       t: (key: string) => {
         const { locale } = get();
-        return (translations[locale] as any)[key] || key;
+        const dict = translations[locale] as Record<string, string>;
+        return dict[key] || key;
       },
     }),
     {

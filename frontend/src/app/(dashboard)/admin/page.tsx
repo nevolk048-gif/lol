@@ -119,7 +119,7 @@ export default function AdminPage() {
                 <select
                   className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm"
                   value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value as "SUPER_ADMIN" | "ADMIN" | "SUPPORT" | "ANALYST" })}
                 >
                   <option value="ANALYST">{t("roleAnalyst")}</option>
                   <option value="SUPPORT">{t("roleSupport")}</option>
