@@ -21,6 +21,9 @@ func NewService(db *database.DB) *Service {
 
 type CreateRequest struct {
 	Name       string  `json:"name" binding:"required"`
+	MerchantID *string `json:"merchant_id"`
+	BaseURL    *string `json:"base_url"`
+	SecretKey  *string `json:"secret_key"`
 	WebhookURL *string `json:"webhook_url"`
 	IsSandbox  bool    `json:"is_sandbox"`
 }
@@ -35,7 +38,7 @@ type ProviderStats struct {
 
 func (s *Service) List(ctx context.Context) ([]ProviderStats, error) {
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT p.id, p.name, p.api_key, p.secret_key, p.webhook_url, p.ip_whitelist,
+		SELECT p.id, p.name, p.api_key, p.secret_key, p.merchant_id, p.base_url, p.webhook_url, p.ip_whitelist,
 		       p.status, p.is_sandbox, p.created_at, p.updated_at,
 		       COALESCE(SUM(CASE WHEN t.status = 'PAID' THEN t.amount ELSE 0 END), 0),
 		       COUNT(t.id),
@@ -53,7 +56,7 @@ func (s *Service) List(ctx context.Context) ([]ProviderStats, error) {
 	for rows.Next() {
 		var ps ProviderStats
 		if err := rows.Scan(
-			&ps.ID, &ps.Name, &ps.APIKey, &ps.SecretKey, &ps.WebhookURL, &ps.IPWhitelist,
+			&ps.ID, &ps.Name, &ps.APIKey, &ps.SecretKey, &ps.MerchantID, &ps.BaseURL, &ps.WebhookURL, &ps.IPWhitelist,
 			&ps.Status, &ps.IsSandbox, &ps.CreatedAt, &ps.UpdatedAt,
 			&ps.Turnover, &ps.TransactionCount, &ps.AvgResponseMs,
 		); err != nil {
@@ -67,14 +70,14 @@ func (s *Service) List(ctx context.Context) ([]ProviderStats, error) {
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*ProviderStats, error) {
 	var ps ProviderStats
 	err := s.db.Pool.QueryRow(ctx, `
-		SELECT p.id, p.name, p.api_key, p.secret_key, p.webhook_url, p.ip_whitelist,
+		SELECT p.id, p.name, p.api_key, p.secret_key, p.merchant_id, p.base_url, p.webhook_url, p.ip_whitelist,
 		       p.status, p.is_sandbox, p.created_at, p.updated_at,
 		       COALESCE(SUM(CASE WHEN t.status = 'PAID' THEN t.amount ELSE 0 END), 0),
 		       COUNT(t.id), COALESCE(AVG(t.processing_ms), 0)
 		FROM providers p LEFT JOIN transactions t ON t.provider_id = p.id
 		WHERE p.id = $1 GROUP BY p.id
 	`, id).Scan(
-		&ps.ID, &ps.Name, &ps.APIKey, &ps.SecretKey, &ps.WebhookURL, &ps.IPWhitelist,
+		&ps.ID, &ps.Name, &ps.APIKey, &ps.SecretKey, &ps.MerchantID, &ps.BaseURL, &ps.WebhookURL, &ps.IPWhitelist,
 		&ps.Status, &ps.IsSandbox, &ps.CreatedAt, &ps.UpdatedAt,
 		&ps.Turnover, &ps.TransactionCount, &ps.AvgResponseMs,
 	)
@@ -86,14 +89,23 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*ProviderStats, er
 
 func (s *Service) Create(ctx context.Context, req CreateRequest) (*models.Provider, error) {
 	apiKey := crypto.GenerateAPIKey()
-	secretKey := crypto.GenerateSecretKey()
+
+	// Use provided secret key or generate new one
+	secretKey := ""
+	if req.SecretKey != nil && *req.SecretKey != "" {
+		secretKey = *req.SecretKey
+	} else {
+		secretKey = crypto.GenerateSecretKey()
+	}
 
 	var p models.Provider
 	err := s.db.Pool.QueryRow(ctx, `
-		INSERT INTO providers (name, api_key, secret_key, webhook_url, status, is_sandbox)
-		VALUES ($1, $2, $3, $4, 'ACTIVE', $5)
-		RETURNING id, name, api_key, secret_key, webhook_url, ip_whitelist, status, is_sandbox, created_at, updated_at
-	`, req.Name, apiKey, secretKey, req.WebhookURL, req.IsSandbox).Scan(
+		INSERT INTO providers (name, api_key, secret_key, merchant_id, base_url, webhook_url, status, is_sandbox)
+		VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE', $7)
+		RETURNING id, name, api_key, secret_key, merchant_id, base_url, webhook_url, ip_whitelist, status, is_sandbox, created_at, updated_at
+	`, req.Name, apiKey, secretKey, req.MerchantID, req.BaseURL, req.WebhookURL, req.IsSandbox).Scan(
+		&p.ID, &p.Name, &p.APIKey, &p.SecretKey, &p.MerchantID, &p.BaseURL, &p.WebhookURL, &p.IPWhitelist, &p.Status, &p.IsSandbox, &p.CreatedAt, &p.UpdatedAt,
+	)
 		&p.ID, &p.Name, &p.APIKey, &p.SecretKey, &p.WebhookURL, &p.IPWhitelist,
 		&p.Status, &p.IsSandbox, &p.CreatedAt, &p.UpdatedAt,
 	)

@@ -21,6 +21,9 @@ func NewService(db *database.DB) *Service {
 
 type CreateRequest struct {
 	Name       string  `json:"name" binding:"required"`
+	MerchantID *string `json:"merchant_id"`
+	BaseURL    *string `json:"base_url"`
+	SecretKey  *string `json:"secret_key"`
 	WebhookURL *string `json:"webhook_url"`
 	IsSandbox  bool    `json:"is_sandbox"`
 }
@@ -34,7 +37,7 @@ type CasinoStats struct {
 
 func (s *Service) List(ctx context.Context) ([]CasinoStats, error) {
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT c.id, c.name, c.api_key, c.webhook_url, c.ip_whitelist, c.status, c.is_sandbox,
+		SELECT c.id, c.name, c.api_key, c.merchant_id, c.base_url, c.secret_key, c.webhook_url, c.ip_whitelist, c.status, c.is_sandbox,
 		       c.created_at, c.updated_at,
 		       COALESCE(SUM(CASE WHEN t.status = 'PAID' THEN t.amount ELSE 0 END), 0),
 		       COUNT(t.id)
@@ -50,7 +53,7 @@ func (s *Service) List(ctx context.Context) ([]CasinoStats, error) {
 	for rows.Next() {
 		var cs CasinoStats
 		if err := rows.Scan(
-			&cs.ID, &cs.Name, &cs.APIKey, &cs.WebhookURL, &cs.IPWhitelist, &cs.Status, &cs.IsSandbox,
+			&cs.ID, &cs.Name, &cs.APIKey, &cs.MerchantID, &cs.BaseURL, &cs.SecretKey, &cs.WebhookURL, &cs.IPWhitelist, &cs.Status, &cs.IsSandbox,
 			&cs.CreatedAt, &cs.UpdatedAt, &cs.Turnover, &cs.TransactionCount,
 		); err != nil {
 			return nil, err
@@ -63,14 +66,14 @@ func (s *Service) List(ctx context.Context) ([]CasinoStats, error) {
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*CasinoStats, error) {
 	var cs CasinoStats
 	err := s.db.Pool.QueryRow(ctx, `
-		SELECT c.id, c.name, c.api_key, c.webhook_url, c.ip_whitelist, c.status, c.is_sandbox,
+		SELECT c.id, c.name, c.api_key, c.merchant_id, c.base_url, c.secret_key, c.webhook_url, c.ip_whitelist, c.status, c.is_sandbox,
 		       c.created_at, c.updated_at,
 		       COALESCE(SUM(CASE WHEN t.status = 'PAID' THEN t.amount ELSE 0 END), 0),
 		       COUNT(t.id)
 		FROM casinos c LEFT JOIN transactions t ON t.casino_id = c.id
 		WHERE c.id = $1 GROUP BY c.id
 	`, id).Scan(
-		&cs.ID, &cs.Name, &cs.APIKey, &cs.WebhookURL, &cs.IPWhitelist, &cs.Status, &cs.IsSandbox,
+		&cs.ID, &cs.Name, &cs.APIKey, &cs.MerchantID, &cs.BaseURL, &cs.SecretKey, &cs.WebhookURL, &cs.IPWhitelist, &cs.Status, &cs.IsSandbox,
 		&cs.CreatedAt, &cs.UpdatedAt, &cs.Turnover, &cs.TransactionCount,
 	)
 	if err != nil {
@@ -84,11 +87,11 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*models.Casino
 
 	var c models.Casino
 	err := s.db.Pool.QueryRow(ctx, `
-		INSERT INTO casinos (name, api_key, webhook_url, status, is_sandbox)
-		VALUES ($1, $2, $3, 'ACTIVE', $4)
-		RETURNING id, name, api_key, webhook_url, ip_whitelist, status, is_sandbox, created_at, updated_at
-	`, req.Name, apiKey, req.WebhookURL, req.IsSandbox).Scan(
-		&c.ID, &c.Name, &c.APIKey, &c.WebhookURL, &c.IPWhitelist, &c.Status, &c.IsSandbox, &c.CreatedAt, &c.UpdatedAt,
+		INSERT INTO casinos (name, api_key, merchant_id, base_url, secret_key, webhook_url, status, is_sandbox)
+		VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE', $7)
+		RETURNING id, name, api_key, merchant_id, base_url, secret_key, webhook_url, ip_whitelist, status, is_sandbox, created_at, updated_at
+	`, req.Name, apiKey, req.MerchantID, req.BaseURL, req.SecretKey, req.WebhookURL, req.IsSandbox).Scan(
+		&c.ID, &c.Name, &c.APIKey, &c.MerchantID, &c.BaseURL, &c.SecretKey, &c.WebhookURL, &c.IPWhitelist, &c.Status, &c.IsSandbox, &c.CreatedAt, &c.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create casino: %w", err)

@@ -56,6 +56,9 @@ type Casino struct {
 	ID          uuid.UUID    `json:"id"`
 	Name        string       `json:"name"`
 	APIKey      string       `json:"api_key"`
+	SecretKey   *string      `json:"-"`
+	MerchantID  *string      `json:"merchant_id,omitempty"`
+	BaseURL     *string      `json:"base_url,omitempty"`
 	WebhookURL  *string      `json:"webhook_url,omitempty"`
 	IPWhitelist []string     `json:"ip_whitelist,omitempty"`
 	Status      EntityStatus `json:"status"`
@@ -69,6 +72,8 @@ type Provider struct {
 	Name        string       `json:"name"`
 	APIKey      string       `json:"api_key"`
 	SecretKey   string       `json:"-"`
+	MerchantID  *string      `json:"merchant_id,omitempty"`
+	BaseURL     *string      `json:"base_url,omitempty"`
 	WebhookURL  *string      `json:"webhook_url,omitempty"`
 	IPWhitelist []string     `json:"ip_whitelist,omitempty"`
 	Status      EntityStatus `json:"status"`
