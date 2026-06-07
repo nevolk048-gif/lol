@@ -121,3 +121,14 @@ func (s *Service) RegenerateAPIKey(ctx context.Context, id uuid.UUID) (string, e
 	}
 	return apiKey, nil
 }
+
+func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
+	tag, err := s.db.Pool.Exec(ctx, `DELETE FROM casinos WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}

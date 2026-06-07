@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCurrency, formatNumber } from "@/lib/utils";
-import { CreditCard, ArrowRight, Plus } from "lucide-react";
+import { CreditCard, ArrowRight, Plus, Trash2 } from "lucide-react";
 import { EmptyState, StatCardSkeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useI18n } from "@/hooks/use-i18n";
@@ -54,6 +54,15 @@ export default function CasinosPage() {
       setFormData({ name: "", merchant_id: "", base_url: "", webhook_url: "", secret_key: "", is_sandbox: false });
     },
     onError: () => toast.error(t("failedToCreate")),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.deleteCasino(id),
+    onSuccess: () => {
+      toast.success("Casino deleted successfully");
+      queryClient.invalidateQueries({ queryKey: ["casinos"] });
+    },
+    onError: () => toast.error("Failed to delete casino"),
   });
 
   if (isLoading) {
@@ -175,9 +184,24 @@ export default function CasinosPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {data.map((casino, i) => (
           <motion.div key={casino.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-            <Link href={`/casinos/${casino.id}`}>
-              <Card className="hover:shadow-lg transition-all hover:border-primary/30 cursor-pointer group">
-                <CardHeader className="flex flex-row items-start justify-between">
+            <Card className="hover:shadow-lg transition-all hover:border-primary/30 group relative">
+              <div className="absolute top-2 right-2 z-10">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (confirm(`Delete ${casino.name}?`)) {
+                      deleteMutation.mutate(casino.id);
+                    }
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              <Link href={`/casinos/${casino.id}`}>
+                <CardHeader className="flex flex-row items-start justify-between pr-12">
                   <CardTitle>{casino.name}</CardTitle>
                   <Badge status={casino.status}>{t(casino.status)}</Badge>
                 </CardHeader>
@@ -197,8 +221,8 @@ export default function CasinosPage() {
                     View details <ArrowRight className="ml-1 h-4 w-4" />
                   </div>
                 </CardContent>
-              </Card>
-            </Link>
+              </Link>
+            </Card>
           </motion.div>
         ))}
       </div>

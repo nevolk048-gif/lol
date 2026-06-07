@@ -122,3 +122,14 @@ func (s *Service) UpdateStatus(ctx context.Context, id uuid.UUID, status models.
 	}
 	return nil
 }
+
+func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
+	tag, err := s.db.Pool.Exec(ctx, `DELETE FROM providers WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}

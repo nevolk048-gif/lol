@@ -113,6 +113,10 @@ class ApiClient {
     });
   }
 
+  deleteProvider(id: string) {
+    return this.request(`/providers/${id}`, { method: "DELETE" });
+  }
+
   // Casinos
   getCasinos() {
     return this.request<import("@/types").Casino[]>("/casinos");
@@ -127,6 +131,10 @@ class ApiClient {
       method: "POST",
       body: JSON.stringify(data),
     });
+  }
+
+  deleteCasino(id: string) {
+    return this.request(`/casinos/${id}`, { method: "DELETE" });
   }
 
   // Requisites

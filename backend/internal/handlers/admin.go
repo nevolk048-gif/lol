@@ -75,11 +75,13 @@ func (h *AdminHandler) RegisterRoutes(rg *gin.RouterGroup, auth gin.HandlerFunc)
 		api.POST("/providers", middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin), h.CreateProvider)
 		api.GET("/providers/:id", h.GetProvider)
 		api.PATCH("/providers/:id/status", middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin), h.UpdateProviderStatus)
+		api.DELETE("/providers/:id", middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin), h.DeleteProvider)
 
 		api.GET("/casinos", h.ListCasinos)
 		api.POST("/casinos", middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin), h.CreateCasino)
 		api.GET("/casinos/:id", h.GetCasino)
 		api.POST("/casinos/:id/regenerate-key", middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin), h.RegenerateCasinoKey)
+		api.DELETE("/casinos/:id", middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin), h.DeleteCasino)
 
 		api.GET("/requisites", h.ListRequisites)
 		api.POST("/requisites", middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin), h.CreateRequisite)
@@ -300,6 +302,24 @@ func (h *AdminHandler) RegenerateCasinoKey(c *gin.Context) {
 		return
 	}
 	response.OK(c, gin.H{"api_key": key})
+}
+
+func (h *AdminHandler) DeleteProvider(c *gin.Context) {
+	id, _ := uuid.Parse(c.Param("id"))
+	if err := h.providers.Delete(c.Request.Context(), id); err != nil {
+		response.NotFound(c, "provider not found")
+		return
+	}
+	response.OK(c, gin.H{"message": "provider deleted"})
+}
+
+func (h *AdminHandler) DeleteCasino(c *gin.Context) {
+	id, _ := uuid.Parse(c.Param("id"))
+	if err := h.casinos.Delete(c.Request.Context(), id); err != nil {
+		response.NotFound(c, "casino not found")
+		return
+	}
+	response.OK(c, gin.H{"message": "casino deleted"})
 }
 
 func (h *AdminHandler) ListRequisites(c *gin.Context) {

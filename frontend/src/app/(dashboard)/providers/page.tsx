@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatCardSkeleton, EmptyState } from "@/components/ui/skeleton";
 import { formatCurrency, formatNumber } from "@/lib/utils";
-import { Building2, ArrowRight, Plus } from "lucide-react";
+import { Building2, ArrowRight, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useI18n } from "@/hooks/use-i18n";
 import type { Provider } from "@/types";
@@ -55,6 +55,15 @@ export default function ProvidersPage() {
       setFormData({ name: "", merchant_id: "", base_url: "", webhook_url: "", secret_key: "", is_sandbox: false });
     },
     onError: () => toast.error(t("failedToCreate")),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.deleteProvider(id),
+    onSuccess: () => {
+      toast.success("Provider deleted successfully");
+      queryClient.invalidateQueries({ queryKey: ["providers"] });
+    },
+    onError: () => toast.error("Failed to delete provider"),
   });
 
   if (isLoading) {
@@ -181,9 +190,24 @@ export default function ProvidersPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
           >
-            <Link href={`/providers/${provider.id}`}>
-              <Card className="hover:shadow-lg transition-all hover:border-primary/30 cursor-pointer group">
-                <CardHeader className="flex flex-row items-start justify-between pb-2">
+            <Card className="hover:shadow-lg transition-all hover:border-primary/30 group relative">
+              <div className="absolute top-2 right-2 z-10">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (confirm(`Delete ${provider.name}?`)) {
+                      deleteMutation.mutate(provider.id);
+                    }
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              <Link href={`/providers/${provider.id}`}>
+                <CardHeader className="flex flex-row items-start justify-between pb-2 pr-12">
                   <div>
                     <CardTitle className="text-lg">{provider.name}</CardTitle>
                     <p className="text-xs text-muted-foreground font-mono mt-1">
@@ -215,8 +239,8 @@ export default function ProvidersPage() {
                     View details <ArrowRight className="ml-1 h-4 w-4" />
                   </div>
                 </CardContent>
-              </Card>
-            </Link>
+              </Link>
+            </Card>
           </motion.div>
         ))}
       </div>
