@@ -3,8 +3,9 @@ set -e
 
 echo "Applying migrations..."
 
-psql $DATABASE_URL <<EOF
-$(cat /app/migrations/001_init.sql)
-EOF
+for migration in /app/migrations/*.sql; do
+  echo "Running migration: $(basename $migration)"
+  psql $DATABASE_URL < "$migration"
+done
 
-echo "Migrations applied successfully!"
+echo "All migrations applied successfully!"
