@@ -14,7 +14,19 @@ class ApiClient {
   getToken(): string | null {
     if (this.accessToken) return this.accessToken;
     if (typeof window !== "undefined") {
-      return localStorage.getItem("access_token");
+      // Check both access_token and auth-storage (Zustand)
+      const token = localStorage.getItem("access_token");
+      if (token) return token;
+
+      const authStorage = localStorage.getItem("auth-storage");
+      if (authStorage) {
+        try {
+          const parsed = JSON.parse(authStorage);
+          return parsed.state?.accessToken || null;
+        } catch {
+          return null;
+        }
+      }
     }
     return null;
   }
