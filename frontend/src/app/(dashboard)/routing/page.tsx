@@ -57,7 +57,7 @@ export default function RoutingPage() {
         <CardHeader><CardTitle>Route Rules</CardTitle></CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {rules?.map((rule) => (
+            {Array.isArray(rules) && rules.map((rule) => (
               <div key={rule.id} className="flex items-center justify-between rounded-lg border border-border p-4">
                 <div className="flex items-center gap-4">
                   <div className="text-center">
@@ -77,7 +77,7 @@ export default function RoutingPage() {
                 </div>
               </div>
             ))}
-            {(!rules || rules.length === 0) && (
+            {(!rules || !Array.isArray(rules) || rules.length === 0) && (
               <p className="text-center text-muted-foreground py-8">No routing rules configured</p>
             )}
           </div>

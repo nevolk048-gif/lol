@@ -20,7 +20,7 @@ export default function SandboxPage() {
     queryFn: () => api.getCasinos(),
   });
 
-  const sandboxCasinos = casinos?.filter((c) => c.is_sandbox) ?? [];
+  const sandboxCasinos = Array.isArray(casinos) ? casinos.filter((c) => c.is_sandbox) : [];
 
   const setupMutation = useMutation({
     mutationFn: () => api.sandboxSetup(),
