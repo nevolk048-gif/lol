@@ -50,7 +50,7 @@ export function TestTransactionForm() {
       toast.success(`Transaction created: ${transaction.id.slice(0, 8)}...`);
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error(error.message || "Failed to create transaction");
     },
   });
@@ -83,7 +83,7 @@ export function TestTransactionForm() {
       toast.success(`${transactions.length} test transactions created!`);
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error(error.message || "Failed to create transactions");
     },
   });
