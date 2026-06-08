@@ -63,7 +63,7 @@ func NewMajorPayClient(baseURL, apiKey, secretKey string) *MajorPayClient {
 		baseURL:   baseURL,
 		apiKey:    apiKey,
 		secretKey: secretKey,
-		client:    &http.Client{Timeout: 30 * time.Second},
+		client:    &http.Client{Timeout: 60 * time.Second},
 	}
 }
 
