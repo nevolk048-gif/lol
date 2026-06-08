@@ -17,6 +17,7 @@ import (
 	"github.com/paymentsgate/paymentsgate/internal/audit"
 	"github.com/paymentsgate/paymentsgate/internal/auth"
 	"github.com/paymentsgate/paymentsgate/internal/casinos"
+	"github.com/paymentsgate/paymentsgate/internal/disputes"
 	"github.com/paymentsgate/paymentsgate/internal/handlers"
 	"github.com/paymentsgate/paymentsgate/internal/middleware"
 	"github.com/paymentsgate/paymentsgate/internal/providers"
@@ -24,6 +25,7 @@ import (
 	"github.com/paymentsgate/paymentsgate/internal/routing"
 	"github.com/paymentsgate/paymentsgate/internal/sandbox"
 	"github.com/paymentsgate/paymentsgate/internal/scheduler"
+	"github.com/paymentsgate/paymentsgate/internal/traffic"
 	"github.com/paymentsgate/paymentsgate/internal/transactions"
 	"github.com/paymentsgate/paymentsgate/internal/users"
 	"github.com/paymentsgate/paymentsgate/internal/websocket"
@@ -100,6 +102,8 @@ func main() {
 	auditSvc := audit.NewService(db)
 	txSvc := transactions.NewService(db, router, hub)
 	sandboxSvc := sandbox.NewService(db, casinoSvc, providerSvc, requisiteSvc, ruleSvc, txSvc)
+	disputeSvc := disputes.NewService(db)
+	trafficSvc := traffic.NewService(db)
 
 	authHandler := auth.NewHandler(authSvc)
 	txHandler := transactions.NewHandler(txSvc, db)
@@ -109,6 +113,8 @@ func main() {
 	)
 	providerHandler := handlers.NewProviderAPIHandler(txSvc, db)
 	webhookHandler := handlers.NewWebhookHandler(db, txSvc)
+	disputeHandler := handlers.NewDisputeHandler(disputeSvc)
+	trafficHandler := handlers.NewTrafficHandler(trafficSvc)
 
 	// Запускаем scheduler для фоновых задач
 	schedulerSvc := scheduler.NewScheduler(db, txSvc)
@@ -144,6 +150,8 @@ func main() {
 	txHandler.RegisterRoutes(v1, authMiddleware)
 	adminHandler.RegisterRoutes(v1, authMiddleware)
 	providerHandler.RegisterRoutes(v1)
+	disputeHandler.RegisterRoutes(v1, authMiddleware)
+	trafficHandler.RegisterRoutes(v1, authMiddleware)
 
 	// Webhook routes (no auth required)
 	webhookGroup := v1.Group("/webhook")

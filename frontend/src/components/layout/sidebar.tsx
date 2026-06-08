@@ -17,6 +17,7 @@ import {
   Zap,
   ChevronLeft,
   ChevronRight,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -29,6 +30,7 @@ const navigationKeys = [
   { key: "casinos", href: "/casinos", icon: CreditCard },
   { key: "requisites", href: "/requisites", icon: CreditCard },
   { key: "routing", href: "/routing", icon: Route },
+  { key: "disputes", href: "/disputes", icon: AlertTriangle },
   { key: "finance", href: "/finance", icon: DollarSign },
   { key: "monitoring", href: "/monitoring", icon: Activity },
   { key: "integrationLogs", href: "/integration-logs", icon: FileText },
