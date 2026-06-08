@@ -95,7 +95,6 @@ func (h *WebhookHandler) MajorPayWebhook(c *gin.Context) {
 	fmt.Printf("[DEBUG] Searching for transaction with provider_transaction_id='%s'\n", payload.Object.UUID)
 
 	var txID uuid.UUID
-	var err error
 
 	// Retry up to 3 times with small delay (webhook might arrive before DB commit)
 	for attempt := 1; attempt <= 3; attempt++ {
