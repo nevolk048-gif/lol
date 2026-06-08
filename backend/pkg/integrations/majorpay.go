@@ -91,27 +91,25 @@ func (c *MajorPayClient) CreateDeposit(ctx context.Context, req MajorPayDepositR
 		return nil, fmt.Errorf("provider returned status %d: %s", resp.StatusCode, string(respBody))
 	}
 
-	var result struct {
-		Success bool                     `json:"success"`
-		Data    *MajorPayDepositResponse `json:"data"`
-		Error   *struct {
-			Code    string `json:"code"`
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-
-	if err := json.Unmarshal(respBody, &result); err != nil {
+	// Try to parse response directly (MajorPay returns data directly, not wrapped)
+	var directResponse MajorPayDepositResponse
+	if err := json.Unmarshal(respBody, &directResponse); err != nil {
 		return nil, fmt.Errorf("unmarshal response (body: %s): %w", string(respBody), err)
 	}
 
-	if !result.Success || result.Data == nil {
-		if result.Error != nil {
-			return nil, fmt.Errorf("provider error: %s - %s", result.Error.Code, result.Error.Message)
+	// Map provider field names to our structure
+	// Provider returns "uuid" but we need it in "transaction_id"
+	if directResponse.TransactionID == "" && len(respBody) > 0 {
+		// Try to extract uuid from response
+		var raw map[string]interface{}
+		if err := json.Unmarshal(respBody, &raw); err == nil {
+			if uuid, ok := raw["uuid"].(string); ok {
+				directResponse.TransactionID = uuid
+			}
 		}
-		return nil, fmt.Errorf("provider request failed (body: %s)", string(respBody))
 	}
 
-	return result.Data, nil
+	return &directResponse, nil
 }
 
 // signRequest creates HMAC SHA256 signature
