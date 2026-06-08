@@ -18,7 +18,7 @@ func NewService(db *database.DB) *Service {
 	return &Service{db: db}
 }
 
-// CreateDispute создает новый спор
+// CreateDispute создает новый спор и автоматически блокирует трафик провайдера
 func (s *Service) CreateDispute(ctx context.Context, req CreateDisputeRequest) (*models.Dispute, error) {
 	// Получаем информацию о транзакции
 	var transactionID, providerID, casinoID uuid.UUID
@@ -35,6 +35,13 @@ func (s *Service) CreateDispute(ctx context.Context, req CreateDisputeRequest) (
 		return nil, fmt.Errorf("get transaction: %w", err)
 	}
 
+	// Начинаем транзакцию
+	tx, err := s.db.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
 	// Создаем спор
 	dispute := &models.Dispute{
 		ID:            uuid.New(),
@@ -50,7 +57,7 @@ func (s *Service) CreateDispute(ctx context.Context, req CreateDisputeRequest) (
 		UpdatedAt:     time.Now(),
 	}
 
-	_, err = s.db.Pool.Exec(ctx, `
+	_, err = tx.Exec(ctx, `
 		INSERT INTO disputes
 		(id, transaction_id, provider_id, casino_id, status, reason, amount, currency, created_by, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -62,12 +69,47 @@ func (s *Service) CreateDispute(ctx context.Context, req CreateDisputeRequest) (
 		return nil, fmt.Errorf("create dispute: %w", err)
 	}
 
-	// Записываем в историю
-	err = s.addHistory(ctx, dispute.ID, "DISPUTE_CREATED", req.CreatedBy, map[string]interface{}{
-		"reason": req.Reason,
-	})
+	// Автоматически блокируем трафик провайдера
+	now := time.Now()
+	blockReason := fmt.Sprintf("Автоматическая блокировка: создан спор #%s", dispute.ID.String()[:8])
+
+	_, err = tx.Exec(ctx, `
+		UPDATE providers
+		SET traffic_enabled = false,
+		    traffic_disabled_reason = $2,
+		    traffic_disabled_at = $3,
+		    traffic_disabled_by = $4,
+		    updated_at = NOW()
+		WHERE id = $1
+	`, providerID, blockReason, now, req.CreatedBy)
+
+	if err != nil {
+		return nil, fmt.Errorf("disable provider traffic: %w", err)
+	}
+
+	// Записываем в историю трафика
+	_, err = tx.Exec(ctx, `
+		INSERT INTO provider_traffic_history (id, provider_id, action, reason, performed_by, created_at)
+		VALUES ($1, $2, $3, $4, $5, NOW())
+	`, uuid.New(), providerID, "DISABLED", blockReason, req.CreatedBy)
+
+	if err != nil {
+		return nil, fmt.Errorf("insert traffic history: %w", err)
+	}
+
+	// Записываем в историю спора
+	_, err = tx.Exec(ctx, `
+		INSERT INTO dispute_history (id, dispute_id, action, performed_by, details, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, uuid.New(), dispute.ID, "DISPUTE_CREATED", req.CreatedBy,
+		map[string]interface{}{"reason": req.Reason, "traffic_blocked": true}, time.Now())
+
 	if err != nil {
 		return nil, fmt.Errorf("add history: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit transaction: %w", err)
 	}
 
 	return dispute, nil

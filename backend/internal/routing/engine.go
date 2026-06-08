@@ -92,8 +92,16 @@ func (e *Engine) getMatchingRules(ctx context.Context, req RouteRequest) ([]rule
 		SELECT rr.id, rr.provider_id, rr.weight, rr.priority, rr.is_fallback
 		FROM route_rules rr
 		JOIN providers p ON p.id = rr.provider_id
+		LEFT JOIN (
+			SELECT provider_id, COUNT(*) as active_disputes
+			FROM disputes
+			WHERE status IN ('NEW', 'UNDER_REVIEW', 'AWAITING_PROVIDER_RESPONSE')
+			GROUP BY provider_id
+		) d ON d.provider_id = p.id
 		WHERE rr.status = 'ACTIVE'
 		  AND p.status = 'ACTIVE'
+		  AND p.traffic_enabled = true
+		  AND (d.active_disputes IS NULL OR d.active_disputes = 0)
 		  AND rr.is_sandbox = $1
 		  AND (rr.country IS NULL OR rr.country = $2)
 		  AND (rr.currency IS NULL OR rr.currency = $3)
