@@ -28,6 +28,9 @@ func NewScheduler(db *database.DB, txSvc *transactions.Service) *Scheduler {
 func (s *Scheduler) Start(ctx context.Context) {
 	// Запускаем проверку истекших транзакций каждые 5 минут
 	go s.expireTransactionsJob(ctx, 5*time.Minute)
+
+	// Запускаем синхронизацию реквизитов каждые 5 минут
+	go s.syncRequisitesJob(ctx, 5*time.Minute)
 }
 
 // expireTransactionsJob проверяет и отмечает истекшие транзакции
@@ -108,4 +111,44 @@ func (s *Scheduler) expireOldTransactions(ctx context.Context) {
 
 func parseUUID(s string) (uuid.UUID, error) {
 	return uuid.Parse(s)
+}
+
+// syncRequisitesJob синхронизирует реквизиты с провайдерами каждые 5 минут
+func (s *Scheduler) syncRequisitesJob(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	// Запускаем сразу при старте
+	s.syncProviderRequisites(ctx)
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("[Scheduler] Stopping sync requisites job")
+			return
+		case <-ticker.C:
+			s.syncProviderRequisites(ctx)
+		}
+	}
+}
+
+// syncProviderRequisites синхронизирует реквизиты с MajorPay
+func (s *Scheduler) syncProviderRequisites(ctx context.Context) {
+	log.Println("[INFO] Starting requisites sync with providers")
+
+	// Получаем всех активных провайдеров с base_url
+	rows, err := s.db.Pool.Query(ctx, `
+		SELECT id, name, base_url, api_key, secret_key
+		FROM providers
+		WHERE status = 'ACTIVE' AND base_url IS NOT NULL AND base_url != ''
+	`)
+	if err != nil {
+		log.Printf("[ERROR] Failed to query providers: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	// TODO: Добавить логику синхронизации когда MajorPay API будет доступен
+	// Пока просто логируем что задача запущена
+	log.Println("[INFO] Requisites sync job running (waiting for provider API access)")
 }

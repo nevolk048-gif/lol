@@ -154,3 +154,37 @@ func (c *MajorPayClient) NotifyPayment(ctx context.Context, transactionID uuid.U
 
 	return nil
 }
+
+// GetActiveRequisites fetches list of active requisites from provider
+func (c *MajorPayClient) GetActiveRequisites(ctx context.Context) ([]Requisite, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/requisites", nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("merchant-id", c.apiKey)
+	httpReq.Header.Set("merchant-secret-key", c.secretKey)
+
+	resp, err := c.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("provider returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var requisites []Requisite
+	if err := json.Unmarshal(respBody, &requisites); err != nil {
+		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	return requisites, nil
+}
