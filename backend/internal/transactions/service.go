@@ -2,6 +2,7 @@ package transactions
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -110,11 +111,11 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 			"country":    req.Country,
 			"is_sandbox": isSandbox,
 		}
-		detailsJSON, _ := json.Marshal(routingErrorDetails)
+		routingErrJSON, _ := json.Marshal(routingErrorDetails)
 		_, _ = s.db.Pool.Exec(ctx, `
 			INSERT INTO audit_logs (action, entity_type, entity_id, details)
 			VALUES ('ROUTING_ERROR', 'transaction', $1, $2)
-		`, txID, string(detailsJSON))
+		`, txID, string(routingErrJSON))
 
 		_, _ = s.db.Pool.Exec(ctx, `UPDATE transactions SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`, txID)
 		resp.Status = models.TxStatusCancelled
@@ -131,11 +132,11 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 		"requisite_id": routeResult.RequisiteID.String(),
 		"rule_id":      routeResult.RuleID.String(),
 	}
-	detailsJSON, _ := json.Marshal(routingSuccessDetails)
+	routingSuccessJSON, _ := json.Marshal(routingSuccessDetails)
 	_, _ = s.db.Pool.Exec(ctx, `
 		INSERT INTO audit_logs (action, entity_type, entity_id, details)
 		VALUES ('ROUTING_SUCCESS', 'transaction', $1, $2)
-	`, txID, string(detailsJSON))
+	`, txID, string(routingSuccessJSON))
 
 	if err := s.router.ReserveRequisiteLimit(ctx, routeResult.RequisiteID, req.Amount); err != nil {
 		_, _ = s.db.Pool.Exec(ctx, `UPDATE transactions SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`, txID)
@@ -175,11 +176,11 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 		"provider_name": provider.Name,
 		"has_base_url":  provider.BaseURL != nil && *provider.BaseURL != "",
 	}
-	detailsJSON, _ := json.Marshal(debugDetails)
+	debugJSON, _ := json.Marshal(debugDetails)
 	_, _ = s.db.Pool.Exec(ctx, `
 		INSERT INTO audit_logs (action, entity_type, entity_id, details)
 		VALUES ('DEBUG_PROVIDER_CHECK', 'transaction', $1, $2)
-	`, txID, string(detailsJSON))
+	`, txID, string(debugJSON))
 
 	// Call provider API if base_url is configured
 	if provider.BaseURL != nil && *provider.BaseURL != "" {
@@ -213,11 +214,11 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 				"error":        err.Error(),
 				"provider_url": *provider.BaseURL,
 			}
-			detailsJSON, _ := json.Marshal(errorDetails)
+			errorJSON, _ := json.Marshal(errorDetails)
 			_, _ = s.db.Pool.Exec(ctx, `
 				INSERT INTO audit_logs (action, entity_type, entity_id, details)
 				VALUES ('PROVIDER_API_ERROR', 'transaction', $1, $2)
-			`, txID, string(detailsJSON))
+			`, txID, string(errorJSON))
 		} else {
 			fmt.Printf("[SUCCESS] Provider API response: transaction_id=%s\n", providerResp.TransactionID)
 			// Log successful provider call
@@ -225,11 +226,11 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 				"provider_transaction_id": providerResp.TransactionID.String(),
 				"provider_url":            *provider.BaseURL,
 			}
-			detailsJSON, _ := json.Marshal(successDetails)
+			successJSON, _ := json.Marshal(successDetails)
 			_, _ = s.db.Pool.Exec(ctx, `
 				INSERT INTO audit_logs (action, entity_type, entity_id, details)
 				VALUES ('PROVIDER_API_CALLED', 'transaction', $1, $2)
-			`, txID, string(detailsJSON))
+			`, txID, string(successJSON))
 		}
 	} else {
 		fmt.Printf("[WARN] Provider %s has no base_url configured, skipping API call\n", provider.Name)
@@ -237,11 +238,11 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 			"provider_id":   provider.ID.String(),
 			"provider_name": provider.Name,
 		}
-		detailsJSON, _ := json.Marshal(noURLDetails)
+		noURLJSON, _ := json.Marshal(noURLDetails)
 		_, _ = s.db.Pool.Exec(ctx, `
 			INSERT INTO audit_logs (action, entity_type, entity_id, details)
 			VALUES ('PROVIDER_NO_URL', 'transaction', $1, $2)
-		`, txID, string(detailsJSON))
+		`, txID, string(noURLJSON))
 	}
 
 	resp.Status = models.TxStatusWaitingPayment
