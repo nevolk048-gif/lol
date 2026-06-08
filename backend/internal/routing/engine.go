@@ -71,34 +71,10 @@ func (e *Engine) Route(ctx context.Context, req RouteRequest) (*RouteResult, err
 		return nil, err
 	}
 
-	requisite, err := e.getAvailableRequisite(ctx, provider.ID, req.Amount, req.Currency, req.Country, req.IsSandbox)
-	if err != nil {
-		if selectedRule.IsFallback {
-			return nil, err
-		}
-		for _, rule := range rules {
-			if rule.ID == selectedRule.ID {
-				continue
-			}
-			altProvider, pErr := e.getActiveProvider(ctx, rule.ProviderID, req.IsSandbox)
-			if pErr != nil {
-				continue
-			}
-			altReq, rErr := e.getAvailableRequisite(ctx, altProvider.ID, req.Amount, req.Currency, req.Country, req.IsSandbox)
-			if rErr == nil {
-				return &RouteResult{
-					ProviderID:  altProvider.ID,
-					RequisiteID: altReq.ID,
-					RuleID:      rule.ID,
-				}, nil
-			}
-		}
-		return nil, ErrNoRequisiteAvailable
-	}
-
+	// No need to check requisites - provider API will handle it
 	return &RouteResult{
 		ProviderID:  provider.ID,
-		RequisiteID: requisite.ID,
+		RequisiteID: uuid.Nil, // Not used anymore
 		RuleID:      selectedRule.ID,
 	}, nil
 }

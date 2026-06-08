@@ -155,42 +155,29 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 	processingMs := time.Since(start).Milliseconds()
 	_, err = s.db.Pool.Exec(ctx, `
 		UPDATE transactions
-		SET provider_id = $2, requisite_id = $3, status = 'WAITING_PAYMENT',
-		    assigned_at = $4, processing_ms = $5, updated_at = NOW()
+		SET provider_id = $2, status = 'WAITING_PAYMENT',
+		    assigned_at = $3, processing_ms = $4, updated_at = NOW()
 		WHERE id = $1
-	`, txID, routeResult.ProviderID, routeResult.RequisiteID, now, processingMs)
+	`, txID, routeResult.ProviderID, now, processingMs)
 	if err != nil {
 		return nil, err
 	}
 
-	var requisite models.Requisite
 	var provider models.Provider
-	err = s.db.Pool.QueryRow(ctx, `SELECT bank_name, holder_name, account_number FROM requisites WHERE id = $1`, routeResult.RequisiteID).
-		Scan(&requisite.BankName, &requisite.HolderName, &requisite.AccountNumber)
-	if err != nil {
-		return nil, fmt.Errorf("fetch requisite: %w", err)
-	}
-
 	err = s.db.Pool.QueryRow(ctx, `SELECT id, name, base_url, api_key, secret_key FROM providers WHERE id = $1`, routeResult.ProviderID).
 		Scan(&provider.ID, &provider.Name, &provider.BaseURL, &provider.APIKey, &provider.SecretKey)
 	if err != nil {
 		return nil, fmt.Errorf("fetch provider: %w", err)
 	}
 
-	fmt.Printf("[DEBUG] Provider loaded: id=%s, name=%s, has_base_url=%v, base_url_value=%v\n",
-		provider.ID, provider.Name, provider.BaseURL != nil, provider.BaseURL)
+	fmt.Printf("[DEBUG] Provider loaded: id=%s, name=%s, has_base_url=%v\n",
+		provider.ID, provider.Name, provider.BaseURL != nil)
 
-	// DEBUG: Always log that we reached this point
-	debugDetails := map[string]interface{}{
-		"provider_id":   provider.ID.String(),
-		"provider_name": provider.Name,
-		"has_base_url":  provider.BaseURL != nil && *provider.BaseURL != "",
+	resp := &DepositResponse{
+		TransactionID: txID,
+		Status:        models.TxStatusWaitingPayment,
+		Provider:      &ProviderInfo{ID: provider.ID, Name: provider.Name},
 	}
-	debugJSON, _ := json.Marshal(debugDetails)
-	_, _ = s.db.Pool.Exec(ctx, `
-		INSERT INTO audit_logs (action, entity_type, entity_id, details)
-		VALUES ('DEBUG_PROVIDER_CHECK', 'transaction', $1, $2)
-	`, txID, string(debugJSON))
 
 	// Call provider API if base_url is configured
 	if provider.BaseURL != nil && *provider.BaseURL != "" {
@@ -229,6 +216,8 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 				INSERT INTO audit_logs (action, entity_type, entity_id, details)
 				VALUES ('PROVIDER_API_ERROR', 'transaction', $1, $2)
 			`, txID, string(errorJSON))
+
+			return nil, fmt.Errorf("provider API error: %w", err)
 		} else {
 			fmt.Printf("[SUCCESS] Provider API response: transaction_id=%s\n", providerResp.TransactionID)
 
@@ -247,19 +236,21 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 					providerResp.TransactionID, txID, rowsAffected)
 			}
 
-			// Use requisites from provider response if available
+			// Use requisites from provider response
 			if providerResp.Requisite.BankName != "" {
-				requisite.BankName = providerResp.Requisite.BankName
-				requisite.HolderName = providerResp.Requisite.HolderName
-				requisite.AccountNumber = providerResp.Requisite.AccountNumber
-				fmt.Printf("[DEBUG] Using requisites from provider: bank=%s\n", requisite.BankName)
+				resp.Requisite = &RequisiteInfo{
+					BankName:      providerResp.Requisite.BankName,
+					HolderName:    providerResp.Requisite.HolderName,
+					AccountNumber: providerResp.Requisite.AccountNumber,
+				}
+				fmt.Printf("[DEBUG] Using requisites from provider: bank=%s\n", providerResp.Requisite.BankName)
 			}
 
 			// Log successful provider call
 			successDetails := map[string]interface{}{
 				"provider_transaction_id": providerResp.TransactionID,
 				"provider_url":            *provider.BaseURL,
-				"requisite_bank":          requisite.BankName,
+				"requisite_bank":          providerResp.Requisite.BankName,
 			}
 			successJSON, _ := json.Marshal(successDetails)
 			_, _ = s.db.Pool.Exec(ctx, `
@@ -268,25 +259,9 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 			`, txID, string(successJSON))
 		}
 	} else {
-		fmt.Printf("[WARN] Provider %s has no base_url configured, skipping API call\n", provider.Name)
-		noURLDetails := map[string]interface{}{
-			"provider_id":   provider.ID.String(),
-			"provider_name": provider.Name,
-		}
-		noURLJSON, _ := json.Marshal(noURLDetails)
-		_, _ = s.db.Pool.Exec(ctx, `
-			INSERT INTO audit_logs (action, entity_type, entity_id, details)
-			VALUES ('PROVIDER_NO_URL', 'transaction', $1, $2)
-		`, txID, string(noURLJSON))
+		fmt.Printf("[ERROR] Provider %s has no base_url configured\n", provider.Name)
+		return nil, fmt.Errorf("provider has no API endpoint configured")
 	}
-
-	resp.Status = models.TxStatusWaitingPayment
-	resp.Requisite = &RequisiteInfo{
-		BankName:      requisite.BankName,
-		HolderName:    requisite.HolderName,
-		AccountNumber: requisite.AccountNumber,
-	}
-	resp.Provider = &ProviderInfo{ID: provider.ID, Name: provider.Name}
 
 	s.hub.Broadcast(websocket.EventStatusChange, map[string]interface{}{
 		"transaction_id": txID,
