@@ -167,11 +167,8 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 	fmt.Printf("[DEBUG] Provider loaded: id=%s, name=%s, has_base_url=%v\n",
 		provider.ID, provider.Name, provider.BaseURL != nil)
 
-	resp := &DepositResponse{
-		TransactionID: txID,
-		Status:        models.TxStatusWaitingPayment,
-		Provider:      &ProviderInfo{ID: provider.ID, Name: provider.Name},
-	}
+	resp.Status = models.TxStatusWaitingPayment
+	resp.Provider = &ProviderInfo{ID: provider.ID, Name: provider.Name}
 
 	// Call provider API if base_url is configured
 	if provider.BaseURL != nil && *provider.BaseURL != "" {
