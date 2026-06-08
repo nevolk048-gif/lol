@@ -240,6 +240,15 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 					AccountNumber: providerResp.Requisite.AccountNumber,
 				}
 				fmt.Printf("[DEBUG] Using requisites from provider: bank=%s\n", providerResp.Requisite.BankName)
+			} else if providerResp.PaymentMethod.Bank != "" {
+				// Use payment_method as fallback (MajorPay format)
+				resp.Requisite = &RequisiteInfo{
+					BankName:      providerResp.PaymentMethod.Bank,
+					HolderName:    providerResp.PaymentMethod.Name,
+					AccountNumber: providerResp.PaymentMethod.Phone, // Phone instead of account number
+				}
+				fmt.Printf("[DEBUG] Using requisites from payment_method: bank=%s, name=%s, phone=%s\n",
+					providerResp.PaymentMethod.Bank, providerResp.PaymentMethod.Name, providerResp.PaymentMethod.Phone)
 			}
 
 			// Log successful provider call
