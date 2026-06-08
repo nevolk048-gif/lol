@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/paymentsgate/paymentsgate/internal/routing"
+	"github.com/paymentsgate/paymentsgate/internal/webhooks"
 	"github.com/paymentsgate/paymentsgate/internal/websocket"
 	"github.com/paymentsgate/paymentsgate/pkg/database"
 	"github.com/paymentsgate/paymentsgate/pkg/integrations"
@@ -16,13 +17,19 @@ import (
 )
 
 type Service struct {
-	db     *database.DB
-	router *routing.Engine
-	hub    *websocket.Hub
+	db              *database.DB
+	router          *routing.Engine
+	hub             *websocket.Hub
+	webhookNotifier *webhooks.Notifier
 }
 
 func NewService(db *database.DB, router *routing.Engine, hub *websocket.Hub) *Service {
-	return &Service{db: db, router: router, hub: hub}
+	return &Service{
+		db:              db,
+		router:          router,
+		hub:             hub,
+		webhookNotifier: webhooks.NewNotifier(db),
+	}
 }
 
 type CreateDepositRequest struct {
@@ -221,6 +228,14 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 			`, txID, string(errorJSON))
 		} else {
 			fmt.Printf("[SUCCESS] Provider API response: transaction_id=%s\n", providerResp.TransactionID)
+
+			// Save provider transaction ID for webhook matching
+			_, _ = s.db.Pool.Exec(ctx, `
+				UPDATE transactions
+				SET provider_transaction_id = $2, updated_at = NOW()
+				WHERE id = $1
+			`, txID, providerResp.TransactionID.String())
+
 			// Log successful provider call
 			successDetails := map[string]interface{}{
 				"provider_transaction_id": providerResp.TransactionID.String(),
@@ -392,6 +407,14 @@ func (s *Service) UpdateStatus(ctx context.Context, id uuid.UUID, status models.
 		"transaction_id": id,
 		"status":         status,
 	})
+
+	// Send webhook notification to merchant on final status
+	go func() {
+		if err := s.webhookNotifier.NotifyMerchant(context.Background(), id, status); err != nil {
+			fmt.Printf("[ERROR] Failed to send webhook for transaction %s: %v\n", id, err)
+		}
+	}()
+
 	return nil
 }
 

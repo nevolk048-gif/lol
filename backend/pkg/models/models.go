@@ -32,6 +32,8 @@ const (
 	TxStatusPaid           TransactionStatus = "PAID"
 	TxStatusExpired        TransactionStatus = "EXPIRED"
 	TxStatusCancelled      TransactionStatus = "CANCELLED"
+	TxStatusPayoutSuccess  TransactionStatus = "PAYOUT_SUCCESS"
+	TxStatusPayoutError    TransactionStatus = "PAYOUT_ERROR"
 )
 
 type RequisiteStatus string
