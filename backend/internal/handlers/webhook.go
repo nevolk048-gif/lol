@@ -87,12 +87,11 @@ func (h *WebhookHandler) MajorPayWebhook(c *gin.Context) {
 		return
 	}
 
-	// Find transaction by provider transaction ID (stored in external_id or separate field)
-	// For now, we'll need to add provider_transaction_id field or use external_id
+	// Find transaction by provider transaction ID
 	var txID uuid.UUID
 	err = h.db.Pool.QueryRow(c.Request.Context(), `
 		SELECT id FROM transactions
-		WHERE external_id = $1 OR id::text = $1
+		WHERE provider_transaction_id = $1
 		LIMIT 1
 	`, payload.Object.UUID).Scan(&txID)
 
