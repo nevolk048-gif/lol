@@ -12,6 +12,14 @@ export type TransactionStatus =
 
 export type RequisiteStatus = "ACTIVE" | "INACTIVE" | "EXHAUSTED";
 
+export type DisputeStatus =
+  | "NEW"
+  | "UNDER_REVIEW"
+  | "AWAITING_PROVIDER_RESPONSE"
+  | "MERCHANT_WON"
+  | "PROVIDER_WON"
+  | "CLOSED";
+
 export interface User {
   id: string;
   email: string;
@@ -107,6 +115,34 @@ export interface RouteRule {
   is_sandbox: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface Dispute {
+  id: string;
+  transaction_id: string;
+  provider_id: string;
+  casino_id: string;
+  status: DisputeStatus;
+  reason: string;
+  amount: number;
+  currency: string;
+  created_by?: string;
+  resolved_by?: string;
+  resolved_at?: string;
+  created_at: string;
+  updated_at: string;
+  provider_name?: string;
+  casino_name?: string;
+}
+
+export interface DisputeMessage {
+  id: string;
+  dispute_id: string;
+  sender_type: string;
+  sender_id: string;
+  message: string;
+  attachments?: Record<string, unknown>;
+  created_at: string;
 }
 
 export interface AuditLog {

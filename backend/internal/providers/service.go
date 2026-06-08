@@ -39,7 +39,8 @@ type ProviderStats struct {
 func (s *Service) List(ctx context.Context) ([]ProviderStats, error) {
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT p.id, p.name, p.api_key, p.secret_key, p.merchant_id, p.base_url, p.webhook_url, p.ip_whitelist,
-		       p.status, p.is_sandbox, p.created_at, p.updated_at,
+		       p.status, p.is_sandbox, p.traffic_enabled, p.traffic_disabled_reason, p.traffic_disabled_at, p.traffic_disabled_by,
+		       p.created_at, p.updated_at,
 		       COALESCE(SUM(CASE WHEN t.status = 'PAID' THEN t.amount ELSE 0 END), 0),
 		       COUNT(t.id),
 		       COALESCE(AVG(t.processing_ms), 0)
@@ -57,7 +58,8 @@ func (s *Service) List(ctx context.Context) ([]ProviderStats, error) {
 		var ps ProviderStats
 		if err := rows.Scan(
 			&ps.ID, &ps.Name, &ps.APIKey, &ps.SecretKey, &ps.MerchantID, &ps.BaseURL, &ps.WebhookURL, &ps.IPWhitelist,
-			&ps.Status, &ps.IsSandbox, &ps.CreatedAt, &ps.UpdatedAt,
+			&ps.Status, &ps.IsSandbox, &ps.TrafficEnabled, &ps.TrafficDisabledReason, &ps.TrafficDisabledAt, &ps.TrafficDisabledBy,
+			&ps.CreatedAt, &ps.UpdatedAt,
 			&ps.Turnover, &ps.TransactionCount, &ps.AvgResponseMs,
 		); err != nil {
 			return nil, err
@@ -71,14 +73,16 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*ProviderStats, er
 	var ps ProviderStats
 	err := s.db.Pool.QueryRow(ctx, `
 		SELECT p.id, p.name, p.api_key, p.secret_key, p.merchant_id, p.base_url, p.webhook_url, p.ip_whitelist,
-		       p.status, p.is_sandbox, p.created_at, p.updated_at,
+		       p.status, p.is_sandbox, p.traffic_enabled, p.traffic_disabled_reason, p.traffic_disabled_at, p.traffic_disabled_by,
+		       p.created_at, p.updated_at,
 		       COALESCE(SUM(CASE WHEN t.status = 'PAID' THEN t.amount ELSE 0 END), 0),
 		       COUNT(t.id), COALESCE(AVG(t.processing_ms), 0)
 		FROM providers p LEFT JOIN transactions t ON t.provider_id = p.id
 		WHERE p.id = $1 GROUP BY p.id
 	`, id).Scan(
 		&ps.ID, &ps.Name, &ps.APIKey, &ps.SecretKey, &ps.MerchantID, &ps.BaseURL, &ps.WebhookURL, &ps.IPWhitelist,
-		&ps.Status, &ps.IsSandbox, &ps.CreatedAt, &ps.UpdatedAt,
+		&ps.Status, &ps.IsSandbox, &ps.TrafficEnabled, &ps.TrafficDisabledReason, &ps.TrafficDisabledAt, &ps.TrafficDisabledBy,
+		&ps.CreatedAt, &ps.UpdatedAt,
 		&ps.Turnover, &ps.TransactionCount, &ps.AvgResponseMs,
 	)
 	if err != nil {

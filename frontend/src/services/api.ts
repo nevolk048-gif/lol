@@ -219,6 +219,13 @@ class ApiClient {
     });
   }
 
+  sandboxSimulatePayment(transactionId: string) {
+    return this.request("/sandbox/simulate-payment", {
+      method: "POST",
+      body: JSON.stringify({ transaction_id: transactionId }),
+    });
+  }
+
   createTestTransaction(data: {
     casino_id: string;
     provider_id?: string;
@@ -230,6 +237,41 @@ class ApiClient {
     return this.request<import("@/types").Transaction>("/test-transaction", {
       method: "POST",
       body: JSON.stringify(data),
+    });
+  }
+
+  // Disputes
+  getDisputes(params?: Record<string, string>) {
+    const q = params ? "?" + new URLSearchParams(params).toString() : "";
+    return this.request<import("@/types").Dispute[]>(`/disputes${q}`);
+  }
+
+  getDispute(id: string) {
+    return this.request<import("@/types").Dispute>(`/disputes/${id}`);
+  }
+
+  createDispute(data: { transaction_id: string; reason: string }) {
+    return this.request<import("@/types").Dispute>("/disputes", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  updateDisputeStatus(id: string, status: string) {
+    return this.request(`/disputes/${id}/status`, {
+      method: "PUT",
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  getDisputeMessages(id: string) {
+    return this.request<import("@/types").DisputeMessage[]>(`/disputes/${id}/messages`);
+  }
+
+  addDisputeMessage(id: string, message: string, attachments?: Record<string, unknown>) {
+    return this.request(`/disputes/${id}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ message, attachments }),
     });
   }
 }

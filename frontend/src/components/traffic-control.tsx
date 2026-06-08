@@ -26,9 +26,23 @@ export function TrafficControl({ providerId, currentStatus = true }: TrafficCont
   const { data: trafficStatus, isLoading } = useQuery({
     queryKey: ["traffic-status", providerId],
     queryFn: async () => {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/traffic/providers/${providerId}/status`);
+      const token = typeof window !== 'undefined' ? localStorage.getItem("access_token") : null;
+      const authStorage = typeof window !== 'undefined' ? localStorage.getItem("auth-storage") : null;
+      let authToken = token;
+
+      if (!authToken && authStorage) {
+        try {
+          const parsed = JSON.parse(authStorage);
+          authToken = parsed.state?.accessToken || null;
+        } catch {}
+      }
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/traffic/providers/${providerId}/status`, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {},
+      });
       if (!res.ok) throw new Error("Failed to fetch traffic status");
-      return res.json();
+      const json = await res.json();
+      return json.data ?? json;
     },
   });
 
@@ -36,27 +50,69 @@ export function TrafficControl({ providerId, currentStatus = true }: TrafficCont
   const { data: trafficHistory } = useQuery({
     queryKey: ["traffic-history", providerId],
     queryFn: async () => {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/traffic/providers/${providerId}/history`);
+      const token = typeof window !== 'undefined' ? localStorage.getItem("access_token") : null;
+      const authStorage = typeof window !== 'undefined' ? localStorage.getItem("auth-storage") : null;
+      let authToken = token;
+
+      if (!authToken && authStorage) {
+        try {
+          const parsed = JSON.parse(authStorage);
+          authToken = parsed.state?.accessToken || null;
+        } catch {}
+      }
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/traffic/providers/${providerId}/history`, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {},
+      });
       if (!res.ok) throw new Error("Failed to fetch traffic history");
-      return res.json();
+      const json = await res.json();
+      return json.data ?? json;
     },
   });
 
   // Update traffic mutation
   const updateTrafficMutation = useMutation({
     mutationFn: async ({ enabled, reason }: { enabled: boolean; reason?: string }) => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem("access_token") : null;
+      const authStorage = typeof window !== 'undefined' ? localStorage.getItem("auth-storage") : null;
+      let authToken = token;
+
+      if (!authToken && authStorage) {
+        try {
+          const parsed = JSON.parse(authStorage);
+          authToken = parsed.state?.accessToken || null;
+        } catch {}
+      }
+
       const url = enabled
-        ? `${process.env.NEXT_PUBLIC_API_URL}/traffic/providers/${providerId}/enable`
-        : `${process.env.NEXT_PUBLIC_API_URL}/traffic/providers/${providerId}/disable`;
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1/traffic/providers/${providerId}/enable`
+        : `${process.env.NEXT_PUBLIC_API_URL}/api/v1/traffic/providers/${providerId}/disable`;
+
+      console.log('Updating traffic:', { url, enabled, reason });
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      if (authToken) {
+        headers["Authorization"] = `Bearer ${authToken}`;
+      }
 
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason }),
+        headers,
+        body: reason ? JSON.stringify({ reason }) : undefined,
       });
 
-      if (!res.ok) throw new Error("Failed to update traffic");
-      return res.json();
+      console.log('Traffic update response:', res.status);
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Traffic update failed:', errorText);
+        throw new Error("Failed to update traffic");
+      }
+      const json = await res.json();
+      return json.data ?? json;
     },
     onSuccess: (_, variables) => {
       toast.success(variables.enabled ? "Трафик включен" : "Трафик отключен");
@@ -66,7 +122,8 @@ export function TrafficControl({ providerId, currentStatus = true }: TrafficCont
       setIsDialogOpen(false);
       setReason("");
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('Traffic mutation error:', error);
       toast.error("Не удалось обновить трафик");
     },
   });
