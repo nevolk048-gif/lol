@@ -177,6 +177,9 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 		return nil, fmt.Errorf("fetch provider: %w", err)
 	}
 
+	fmt.Printf("[DEBUG] Provider loaded: id=%s, name=%s, has_base_url=%v, base_url_value=%v\n",
+		provider.ID, provider.Name, provider.BaseURL != nil, provider.BaseURL)
+
 	// DEBUG: Always log that we reached this point
 	debugDetails := map[string]interface{}{
 		"provider_id":   provider.ID.String(),
