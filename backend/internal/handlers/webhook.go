@@ -76,9 +76,12 @@ func (h *WebhookHandler) MajorPayWebhook(c *gin.Context) {
 		LIMIT 1
 	`).Scan(&providerSecretKey)
 	if err != nil {
+		fmt.Printf("[ERROR] Provider not found in DB: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "provider not found"})
 		return
 	}
+
+	fmt.Printf("[DEBUG] Verifying signature for provider_tx_id=%s\n", payload.Object.UUID)
 
 	// Verify signature: HMAC-SHA256(timestamp + "." + trade_id + "." + raw_body)
 	dataToSign := timestamp + "." + payload.Object.UUID + "." + string(rawBody)
@@ -87,9 +90,12 @@ func (h *WebhookHandler) MajorPayWebhook(c *gin.Context) {
 	expectedSignature := hex.EncodeToString(mac.Sum(nil))
 
 	if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
+		fmt.Printf("[ERROR] Signature mismatch: expected=%s, got=%s\n", expectedSignature, signature)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid signature"})
 		return
 	}
+
+	fmt.Printf("[SUCCESS] Signature verified for provider_tx_id=%s\n", payload.Object.UUID)
 
 	// Find transaction by provider transaction ID
 	fmt.Printf("[DEBUG] Searching for transaction with provider_transaction_id='%s'\n", payload.Object.UUID)
