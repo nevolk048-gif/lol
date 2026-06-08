@@ -115,6 +115,7 @@ func main() {
 	webhookHandler := handlers.NewWebhookHandler(db, txSvc)
 	disputeHandler := handlers.NewDisputeHandler(disputeSvc)
 	trafficHandler := handlers.NewTrafficHandler(trafficSvc)
+	sandboxHandler := handlers.NewSandboxHandler(sandboxSvc)
 
 	// Запускаем scheduler для фоновых задач
 	schedulerSvc := scheduler.NewScheduler(db, txSvc)
@@ -145,13 +146,15 @@ func main() {
 
 	v1 := r.Group("/api/v1")
 	authMiddleware := middleware.Auth(jwtManager)
+	casinoAuthMiddleware := middleware.CasinoAuth(db)
 
 	authHandler.RegisterRoutes(v1, authMiddleware)
 	txHandler.RegisterRoutes(v1, authMiddleware)
 	adminHandler.RegisterRoutes(v1, authMiddleware)
 	providerHandler.RegisterRoutes(v1)
-	disputeHandler.RegisterRoutes(v1, authMiddleware)
+	disputeHandler.RegisterRoutes(v1, authMiddleware, casinoAuthMiddleware)
 	trafficHandler.RegisterRoutes(v1, authMiddleware)
+	sandboxHandler.RegisterRoutes(v1) // Публичные sandbox endpoints
 
 	// Webhook routes (no auth required)
 	webhookGroup := v1.Group("/webhook")

@@ -100,12 +100,11 @@ func (h *AdminHandler) RegisterRoutes(rg *gin.RouterGroup, auth gin.HandlerFunc)
 		api.GET("/audit-logs", middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin), h.ListAuditLogs)
 		api.GET("/integration-logs", h.ListIntegrationLogs)
 
+		// Admin-only sandbox endpoints
 		sandboxGroup := api.Group("/sandbox")
 		sandboxGroup.Use(middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin))
 		{
 			sandboxGroup.POST("/setup", h.SandboxSetup)
-			sandboxGroup.POST("/deposit", h.SandboxDeposit)
-			sandboxGroup.POST("/simulate-payment", h.SandboxSimulatePayment)
 			sandboxGroup.POST("/generate-traffic", h.SandboxGenerateTraffic)
 			sandboxGroup.POST("/generate-stats", h.SandboxGenerateStats)
 		}
