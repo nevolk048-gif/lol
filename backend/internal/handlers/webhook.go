@@ -64,6 +64,9 @@ func (h *WebhookHandler) MajorPayWebhook(c *gin.Context) {
 		return
 	}
 
+	// Log incoming webhook for debugging
+	fmt.Printf("[WEBHOOK] Received type=%s, provider_tx_id=%s\n", payload.Type, payload.Object.UUID)
+
 	// Get provider secret key from database
 	var providerSecretKey string
 	err = h.db.Pool.QueryRow(c.Request.Context(), `
@@ -97,7 +100,13 @@ func (h *WebhookHandler) MajorPayWebhook(c *gin.Context) {
 
 	if err != nil {
 		// Transaction not found - log but return 200 OK to avoid retries
-		fmt.Printf("[WARN] Webhook received for unknown transaction: %s\n", payload.Object.UUID)
+		fmt.Printf("[WARN] Webhook received for unknown transaction: provider_tx_id=%s, error=%v\n", payload.Object.UUID, err)
+
+		// Also try to find ANY transaction to help debug
+		var count int
+		_ = h.db.Pool.QueryRow(c.Request.Context(), `SELECT COUNT(*) FROM transactions`).Scan(&count)
+		fmt.Printf("[DEBUG] Total transactions in DB: %d\n", count)
+
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		return
 	}
