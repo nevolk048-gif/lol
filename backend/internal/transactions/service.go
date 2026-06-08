@@ -209,6 +209,11 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 			`, txID, string(errorJSON))
 		} else {
 			fmt.Printf("[SUCCESS] Provider API response: transaction_id=%s\n", providerResp.TransactionID)
+
+			// Log full response for debugging
+			respJSON, _ := json.Marshal(providerResp)
+			fmt.Printf("[DEBUG] Full provider response: %s\n", string(respJSON))
+
 			fmt.Printf("[DEBUG] Provider response requisite: bank=%s, holder=%s, account=%s\n",
 				providerResp.Requisite.BankName, providerResp.Requisite.HolderName, providerResp.Requisite.AccountNumber)
 
