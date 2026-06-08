@@ -41,8 +41,8 @@ type SecurityConfig struct {
 }
 
 func Load() *Config {
-	accessTTL, _ := strconv.Atoi(getEnv("JWT_ACCESS_TTL_MINUTES", "15"))
-	refreshTTL, _ := strconv.Atoi(getEnv("JWT_REFRESH_TTL_HOURS", "168"))
+	accessTTL, _ := strconv.Atoi(getEnv("JWT_ACCESS_TTL_MINUTES", "525600"))  // 1 year
+	refreshTTL, _ := strconv.Atoi(getEnv("JWT_REFRESH_TTL_HOURS", "87600"))   // 10 years
 	rateLimit, _ := strconv.Atoi(getEnv("RATE_LIMIT_RPS", "100"))
 
 	return &Config{
