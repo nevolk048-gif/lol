@@ -101,14 +101,14 @@ func (c *MajorPayClient) CreateDeposit(ctx context.Context, req MajorPayDepositR
 	}
 
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal response: %w", err)
+		return nil, fmt.Errorf("unmarshal response (body: %s): %w", string(respBody), err)
 	}
 
 	if !result.Success || result.Data == nil {
 		if result.Error != nil {
 			return nil, fmt.Errorf("provider error: %s - %s", result.Error.Code, result.Error.Message)
 		}
-		return nil, fmt.Errorf("provider request failed")
+		return nil, fmt.Errorf("provider request failed (body: %s)", string(respBody))
 	}
 
 	return result.Data, nil
