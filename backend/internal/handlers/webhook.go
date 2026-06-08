@@ -111,6 +111,8 @@ func (h *WebhookHandler) MajorPayWebhook(c *gin.Context) {
 		return
 	}
 
+	fmt.Printf("[SUCCESS] Found transaction %s for provider_tx_id=%s\n", txID, payload.Object.UUID)
+
 	// Map MajorPay status to our status
 	var newStatus models.TransactionStatus
 	switch payload.Type {
