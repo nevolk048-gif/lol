@@ -23,6 +23,7 @@ import (
 	"github.com/paymentsgate/paymentsgate/internal/requisites"
 	"github.com/paymentsgate/paymentsgate/internal/routing"
 	"github.com/paymentsgate/paymentsgate/internal/sandbox"
+	"github.com/paymentsgate/paymentsgate/internal/scheduler"
 	"github.com/paymentsgate/paymentsgate/internal/transactions"
 	"github.com/paymentsgate/paymentsgate/internal/users"
 	"github.com/paymentsgate/paymentsgate/internal/websocket"
@@ -94,6 +95,14 @@ func main() {
 		analyticsSvc, auditSvc, sandboxSvc, txSvc, hub,
 	)
 	providerHandler := handlers.NewProviderAPIHandler(txSvc, db)
+	webhookHandler := handlers.NewWebhookHandler(db, txSvc)
+
+	// Запускаем scheduler для фоновых задач
+	schedulerSvc := scheduler.NewScheduler(db, txSvc)
+	schedulerCtx, schedulerCancel := context.WithCancel(ctx)
+	defer schedulerCancel()
+	schedulerSvc.Start(schedulerCtx)
+	log.Println("Background scheduler started")
 
 	if cfg.Server.Environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -122,6 +131,10 @@ func main() {
 	txHandler.RegisterRoutes(v1, authMiddleware)
 	adminHandler.RegisterRoutes(v1, authMiddleware)
 	providerHandler.RegisterRoutes(v1)
+
+	// Webhook routes (no auth required)
+	webhookGroup := v1.Group("/webhook")
+	webhookHandler.RegisterRoutes(webhookGroup)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.Server.Port,
