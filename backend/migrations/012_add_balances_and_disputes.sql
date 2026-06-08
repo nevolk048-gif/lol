@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS provider_balance_transactions (
     description TEXT,
     reference_type VARCHAR(50), -- TRANSACTION, DISPUTE, PAYOUT, MANUAL
     reference_id UUID,
-    performed_by UUID REFERENCES admin_users(id),
+    performed_by UUID,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
@@ -78,8 +78,8 @@ CREATE TABLE IF NOT EXISTS disputes (
     reason TEXT NOT NULL,
     amount DECIMAL(15, 2) NOT NULL,
     currency VARCHAR(3) NOT NULL,
-    created_by UUID REFERENCES admin_users(id),
-    resolved_by UUID REFERENCES admin_users(id),
+    created_by UUID,
+    resolved_by UUID,
     resolved_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -122,7 +122,7 @@ CREATE INDEX idx_dispute_history_created ON dispute_history(created_at DESC);
 ALTER TABLE providers ADD COLUMN IF NOT EXISTS traffic_enabled BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE providers ADD COLUMN IF NOT EXISTS traffic_disabled_reason TEXT;
 ALTER TABLE providers ADD COLUMN IF NOT EXISTS traffic_disabled_at TIMESTAMP;
-ALTER TABLE providers ADD COLUMN IF NOT EXISTS traffic_disabled_by UUID REFERENCES admin_users(id);
+ALTER TABLE providers ADD COLUMN IF NOT EXISTS traffic_disabled_by UUID;
 
 CREATE INDEX idx_providers_traffic_enabled ON providers(traffic_enabled);
 
@@ -132,7 +132,7 @@ CREATE TABLE IF NOT EXISTS provider_traffic_history (
     provider_id UUID NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
     action VARCHAR(20) NOT NULL, -- ENABLED, DISABLED
     reason TEXT,
-    performed_by UUID REFERENCES admin_users(id),
+    performed_by UUID,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
