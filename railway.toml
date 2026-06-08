@@ -1,8 +1,7 @@
 [build]
 builder = "nixpacks"
-buildCommand = "cd backend && go build -o bin/server ./cmd/server"
 
 [deploy]
-startCommand = "cd backend && ./bin/server"
+startCommand = "./bin/server"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
