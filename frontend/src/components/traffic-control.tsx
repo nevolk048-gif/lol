@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertTriangle, CheckCircle, XCircle, History } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,7 +20,6 @@ interface TrafficControlProps {
 export function TrafficControl({ providerId, currentStatus = true }: TrafficControlProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [reason, setReason] = useState("");
-  const [action, setAction] = useState<"enable" | "disable">("disable");
   const queryClient = useQueryClient();
 
   // Fetch traffic status
@@ -73,7 +72,6 @@ export function TrafficControl({ providerId, currentStatus = true }: TrafficCont
   });
 
   const handleToggle = (checked: boolean) => {
-    setAction(checked ? "enable" : "disable");
     if (!checked) {
       // Если отключаем, открываем диалог для причины
       setIsDialogOpen(true);
@@ -158,7 +156,7 @@ export function TrafficControl({ providerId, currentStatus = true }: TrafficCont
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {trafficHistory?.map((item: any) => (
+            {trafficHistory?.map((item: { id: string; action: string; reason?: string; created_at: string }) => (
               <div key={item.id} className="flex items-start gap-3 pb-3 border-b last:border-0">
                 <div className={`p-2 rounded-full ${item.action === 'ENABLED' ? 'bg-green-100' : 'bg-red-100'}`}>
                   {item.action === 'ENABLED' ? (
