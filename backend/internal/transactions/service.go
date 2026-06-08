@@ -247,10 +247,19 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 					providerResp.TransactionID, txID, rowsAffected)
 			}
 
+			// Use requisites from provider response if available
+			if providerResp.Requisite.BankName != "" {
+				requisite.BankName = providerResp.Requisite.BankName
+				requisite.HolderName = providerResp.Requisite.HolderName
+				requisite.AccountNumber = providerResp.Requisite.AccountNumber
+				fmt.Printf("[DEBUG] Using requisites from provider: bank=%s\n", requisite.BankName)
+			}
+
 			// Log successful provider call
 			successDetails := map[string]interface{}{
 				"provider_transaction_id": providerResp.TransactionID,
 				"provider_url":            *provider.BaseURL,
+				"requisite_bank":          requisite.BankName,
 			}
 			successJSON, _ := json.Marshal(successDetails)
 			_, _ = s.db.Pool.Exec(ctx, `
