@@ -211,6 +211,8 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 			return nil, fmt.Errorf("provider API error: %w", err)
 		} else {
 			fmt.Printf("[SUCCESS] Provider API response: transaction_id=%s\n", providerResp.TransactionID)
+			fmt.Printf("[DEBUG] Provider response requisite: bank=%s, holder=%s, account=%s\n",
+				providerResp.Requisite.BankName, providerResp.Requisite.HolderName, providerResp.Requisite.AccountNumber)
 
 			// Save provider transaction ID for webhook matching
 			result, err := s.db.Pool.Exec(ctx, `
