@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/widgets/stat-card";
 import { StatCardSkeleton } from "@/components/ui/skeleton";
+import { TrafficControl } from "@/components/traffic-control";
 import { DollarSign, ArrowLeftRight, Clock, Activity, PlayCircle, PauseCircle, Ban } from "lucide-react";
 import { toast } from "sonner";
 
@@ -129,6 +130,9 @@ export default function ProviderDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Traffic Control */}
+      <TrafficControl providerId={id} currentStatus={provider?.traffic_enabled} />
     </div>
   );
 }
