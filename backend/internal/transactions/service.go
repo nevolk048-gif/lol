@@ -234,11 +234,11 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 				UPDATE transactions
 				SET provider_transaction_id = $2, updated_at = NOW()
 				WHERE id = $1
-			`, txID, providerResp.TransactionID.String())
+			`, txID, providerResp.TransactionID)
 
 			// Log successful provider call
 			successDetails := map[string]interface{}{
-				"provider_transaction_id": providerResp.TransactionID.String(),
+				"provider_transaction_id": providerResp.TransactionID,
 				"provider_url":            *provider.BaseURL,
 			}
 			successJSON, _ := json.Marshal(successDetails)

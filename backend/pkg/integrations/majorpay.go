@@ -33,7 +33,7 @@ type MajorPayDepositRequest struct {
 }
 
 type MajorPayDepositResponse struct {
-	TransactionID          uuid.UUID `json:"transaction_id"`
+	TransactionID          string    `json:"transaction_id"`
 	Status                 string    `json:"status"`
 	HostedPaymentPageURL   string    `json:"hosted_payment_page_url"`
 	Amount                 int       `json:"amount"`
