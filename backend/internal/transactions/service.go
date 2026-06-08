@@ -196,8 +196,8 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 
 		providerResp, err := providerClient.CreateDeposit(ctx, providerReq)
 		if err != nil {
-			fmt.Printf("[ERROR] Provider API call failed: %v\n", err)
-			// Log error but don't fail the transaction
+			fmt.Printf("[ERROR] Provider API call failed: %v (will continue without provider requisites)\n", err)
+			// Log error but continue - transaction already created
 			errorDetails := map[string]interface{}{
 				"error":        err.Error(),
 				"provider_url": *provider.BaseURL,
@@ -207,8 +207,6 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 				INSERT INTO audit_logs (action, entity_type, entity_id, details)
 				VALUES ('PROVIDER_API_ERROR', 'transaction', $1, $2)
 			`, txID, string(errorJSON))
-
-			return nil, fmt.Errorf("provider API error: %w", err)
 		} else {
 			fmt.Printf("[SUCCESS] Provider API response: transaction_id=%s\n", providerResp.TransactionID)
 			fmt.Printf("[DEBUG] Provider response requisite: bank=%s, holder=%s, account=%s\n",
@@ -251,9 +249,35 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 				VALUES ('PROVIDER_API_CALLED', 'transaction', $1, $2)
 			`, txID, string(successJSON))
 		}
-	} else {
-		fmt.Printf("[ERROR] Provider %s has no base_url configured\n", provider.Name)
-		return nil, fmt.Errorf("provider has no API endpoint configured")
+	}
+
+	// If no requisites from provider, use fallback from DB
+	if resp.Requisite == nil {
+		fmt.Printf("[DEBUG] No requisites from provider, using fallback from DB\n")
+		var requisite models.Requisite
+		err = s.db.Pool.QueryRow(ctx, `
+			SELECT bank_name, holder_name, account_number
+			FROM requisites
+			WHERE provider_id = $1
+			  AND status = 'ACTIVE'
+			  AND is_online = true
+			  AND currency = $2
+			  AND country = $3
+			ORDER BY created_at DESC
+			LIMIT 1
+		`, routeResult.ProviderID, req.Currency, req.Country).
+			Scan(&requisite.BankName, &requisite.HolderName, &requisite.AccountNumber)
+
+		if err == nil {
+			resp.Requisite = &RequisiteInfo{
+				BankName:      requisite.BankName,
+				HolderName:    requisite.HolderName,
+				AccountNumber: requisite.AccountNumber,
+			}
+			fmt.Printf("[DEBUG] Using fallback requisites from DB: bank=%s\n", requisite.BankName)
+		} else {
+			fmt.Printf("[ERROR] No fallback requisites found: %v\n", err)
+		}
 	}
 
 	s.hub.Broadcast(websocket.EventStatusChange, map[string]interface{}{
