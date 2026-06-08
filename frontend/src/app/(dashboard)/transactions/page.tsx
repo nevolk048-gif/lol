@@ -45,8 +45,10 @@ export default function TransactionsPage() {
       toast.success("✅ Оплата успешно симулирована");
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
     },
-    onError: () => {
-      toast.error("❌ Ошибка: Ошибка симуляции оплаты");
+    onError: (error: any) => {
+      console.error("Simulate payment error:", error);
+      const errorMessage = error?.message || "Ошибка симуляции оплаты";
+      toast.error(`❌ Ошибка: ${errorMessage}`);
     },
   });
 

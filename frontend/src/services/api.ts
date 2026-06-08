@@ -220,6 +220,7 @@ class ApiClient {
   }
 
   sandboxSimulatePayment(transactionId: string) {
+    console.log('Simulating payment, token:', this.getToken() ? 'present' : 'missing');
     return this.request("/sandbox/simulate-payment", {
       method: "POST",
       body: JSON.stringify({ transaction_id: transactionId }),
