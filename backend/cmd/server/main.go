@@ -59,6 +59,19 @@ func main() {
 	}
 	log.Println("Migrations completed successfully")
 
+	// CRITICAL FIX: Ensure provider_transaction_id column exists
+	log.Println("Ensuring provider_transaction_id column exists...")
+	_, err = db.Pool.Exec(ctx, `
+		ALTER TABLE transactions ADD COLUMN IF NOT EXISTS provider_transaction_id VARCHAR(255);
+		CREATE INDEX IF NOT EXISTS idx_transactions_provider_transaction_id
+		ON transactions(provider_transaction_id)
+		WHERE provider_transaction_id IS NOT NULL;
+	`)
+	if err != nil {
+		log.Fatalf("failed to add provider_transaction_id column: %v", err)
+	}
+	log.Println("provider_transaction_id column verified")
+
 	redisClient, err := redispkg.Connect(ctx, cfg.Redis.URL)
 	if err != nil {
 		log.Printf("redis connection warning: %v", err)
