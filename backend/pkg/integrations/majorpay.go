@@ -33,15 +33,23 @@ type MajorPayDepositRequest struct {
 }
 
 type MajorPayDepositResponse struct {
-	TransactionID          string    `json:"transaction_id"`
-	Status                 string    `json:"status"`
-	HostedPaymentPageURL   string    `json:"hosted_payment_page_url"`
-	Amount                 int       `json:"amount"`
-	MerchantCustomerID     string    `json:"merchant_customer_id"`
-	PaymentMethod          string    `json:"payment_method"`
-	Requisite              Requisite `json:"requisite"`
-	CreatedAt              time.Time `json:"created_at"`
-	ExpiresAt              time.Time `json:"expires_at"`
+	TransactionID          string        `json:"transaction_id"`
+	Status                 string        `json:"status"`
+	HostedPaymentPageURL   string        `json:"hosted_payment_page_url"`
+	Amount                 int           `json:"amount"`
+	MerchantCustomerID     string        `json:"merchant_customer_id"`
+	PaymentMethod          PaymentMethod `json:"payment_method"`
+	Requisite              Requisite     `json:"requisite"`
+	CreatedAt              time.Time     `json:"created_at"`
+	ExpiresAt              time.Time     `json:"expires_at"`
+	UUID                   string        `json:"uuid"` // Provider uses 'uuid' field
+	RedirectURL            string        `json:"redirect_url"`
+}
+
+type PaymentMethod struct {
+	Bank  string `json:"bank"`
+	Name  string `json:"name"`
+	Phone string `json:"phone"`
 }
 
 type Requisite struct {
@@ -97,16 +105,9 @@ func (c *MajorPayClient) CreateDeposit(ctx context.Context, req MajorPayDepositR
 		return nil, fmt.Errorf("unmarshal response (body: %s): %w", string(respBody), err)
 	}
 
-	// Map provider field names to our structure
-	// Provider returns "uuid" but we need it in "transaction_id"
-	if directResponse.TransactionID == "" && len(respBody) > 0 {
-		// Try to extract uuid from response
-		var raw map[string]interface{}
-		if err := json.Unmarshal(respBody, &raw); err == nil {
-			if uuid, ok := raw["uuid"].(string); ok {
-				directResponse.TransactionID = uuid
-			}
-		}
+	// Provider uses 'uuid' field, copy it to TransactionID
+	if directResponse.UUID != "" {
+		directResponse.TransactionID = directResponse.UUID
 	}
 
 	return &directResponse, nil
