@@ -2,10 +2,10 @@
 nixPkgs = ["go_1_21"]
 
 [phases.build]
-cmds = ["go mod download", "go build -o bin/server ./cmd/server"]
+cmds = ["go mod download", "go build -o server ./cmd/server"]
 
 [start]
-cmd = "./bin/server"
+cmd = "./server"
 
 [options]
 workDir = "backend"

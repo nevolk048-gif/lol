@@ -15,8 +15,8 @@ export default function LoginPage() {
   const router = useRouter();
   const { login, isAuthenticated } = useAuthStore();
   const { t } = useI18n();
-  const [email, setEmail] = useState("admin@paymentsgate.io");
-  const [password, setPassword] = useState("Admin123!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -93,7 +93,7 @@ export default function LoginPage() {
                     type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="admin@paymentsgate.io"
+                    placeholder="your.email@company.com"
                     required
                   />
                 </div>
@@ -120,9 +120,6 @@ export default function LoginPage() {
                   {loading ? t("signingIn") : t("signIn")}
                 </Button>
               </form>
-              <p className="mt-4 text-center text-xs text-muted-foreground">
-                {t("demoCredentials")}
-              </p>
             </CardContent>
           </Card>
         </motion.div>
