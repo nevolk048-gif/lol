@@ -88,6 +88,8 @@ func (h *AdminHandler) RegisterRoutes(rg *gin.RouterGroup, auth gin.HandlerFunc)
 		api.GET("/requisites", h.ListRequisites)
 		api.POST("/requisites", middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin), h.CreateRequisite)
 		api.PATCH("/requisites/:id/status", middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin), h.UpdateRequisiteStatus)
+		api.PATCH("/requisites/:id/online", middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin), h.UpdateRequisiteOnlineStatus)
+		api.DELETE("/requisites/:id", middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin), h.DeleteRequisite)
 
 		api.GET("/routing/rules", h.ListRouteRules)
 		api.POST("/routing/rules", middleware.RequireRoles(models.RoleSuperAdmin, models.RoleAdmin), h.CreateRouteRule)
@@ -371,6 +373,35 @@ func (h *AdminHandler) UpdateRequisiteStatus(c *gin.Context) {
 		return
 	}
 	response.OK(c, gin.H{"message": "status updated"})
+}
+
+func (h *AdminHandler) DeleteRequisite(c *gin.Context) {
+	id, _ := uuid.Parse(c.Param("id"))
+	if err := h.requisites.Delete(c.Request.Context(), id); err != nil {
+		if err == pgx.ErrNoRows {
+			response.NotFound(c, "requisite not found")
+			return
+		}
+		response.InternalError(c, "failed to delete requisite")
+		return
+	}
+	response.OK(c, gin.H{"message": "requisite deleted"})
+}
+
+func (h *AdminHandler) UpdateRequisiteOnlineStatus(c *gin.Context) {
+	id, _ := uuid.Parse(c.Param("id"))
+	var req struct {
+		IsOnline bool `json:"is_online"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	if err := h.requisites.UpdateOnlineStatus(c.Request.Context(), id, req.IsOnline); err != nil {
+		response.NotFound(c, "requisite not found")
+		return
+	}
+	response.OK(c, gin.H{"message": "online status updated"})
 }
 
 func (h *AdminHandler) ListRouteRules(c *gin.Context) {

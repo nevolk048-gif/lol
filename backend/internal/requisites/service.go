@@ -99,3 +99,29 @@ func (s *Service) ResetDailyLimits(ctx context.Context) error {
 	`)
 	return err
 }
+
+func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
+	tag, err := s.db.Pool.Exec(ctx, `DELETE FROM requisites WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+func (s *Service) UpdateOnlineStatus(ctx context.Context, id uuid.UUID, isOnline bool) error {
+	tag, err := s.db.Pool.Exec(ctx, `
+		UPDATE requisites
+		SET is_online = $2, last_seen_at = NOW(), updated_at = NOW()
+		WHERE id = $1
+	`, id, isOnline)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}

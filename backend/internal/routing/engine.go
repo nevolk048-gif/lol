@@ -170,6 +170,7 @@ func (e *Engine) getAvailableRequisite(ctx context.Context, providerID uuid.UUID
 		  AND currency = $3
 		  AND country = $4
 		  AND (daily_limit - used_limit) >= $5
+		  AND (is_online IS NULL OR is_online = true)
 		ORDER BY (daily_limit - used_limit) DESC
 		LIMIT 1
 	`, providerID, isSandbox, currency, country, amount).Scan(
