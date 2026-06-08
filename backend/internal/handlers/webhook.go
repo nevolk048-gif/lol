@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -94,11 +95,25 @@ func (h *WebhookHandler) MajorPayWebhook(c *gin.Context) {
 	fmt.Printf("[DEBUG] Searching for transaction with provider_transaction_id='%s'\n", payload.Object.UUID)
 
 	var txID uuid.UUID
-	err = h.db.Pool.QueryRow(c.Request.Context(), `
-		SELECT id FROM transactions
-		WHERE provider_transaction_id = $1
-		LIMIT 1
-	`, payload.Object.UUID).Scan(&txID)
+	var err error
+
+	// Retry up to 3 times with small delay (webhook might arrive before DB commit)
+	for attempt := 1; attempt <= 3; attempt++ {
+		err = h.db.Pool.QueryRow(c.Request.Context(), `
+			SELECT id FROM transactions
+			WHERE provider_transaction_id = $1
+			LIMIT 1
+		`, payload.Object.UUID).Scan(&txID)
+
+		if err == nil {
+			break // Found it!
+		}
+
+		if attempt < 3 {
+			fmt.Printf("[DEBUG] Transaction not found on attempt %d, retrying in 500ms...\n", attempt)
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
 
 	if err != nil {
 		// Transaction not found - log but return 200 OK to avoid retries
