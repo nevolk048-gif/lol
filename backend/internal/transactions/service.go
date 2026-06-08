@@ -383,13 +383,13 @@ func (s *Service) List(ctx context.Context, f ListFilter) ([]models.Transaction,
 }
 
 func (s *Service) UpdateStatus(ctx context.Context, id uuid.UUID, status models.TransactionStatus) error {
-	query := `UPDATE transactions SET status = $2, updated_at = NOW()`
-	args := []interface{}{id, status}
+	query := `UPDATE transactions SET status = $1, updated_at = NOW()`
+	args := []interface{}{status, id}
 
 	if status == models.TxStatusPaid {
 		query += `, paid_at = NOW()`
 	}
-	query += ` WHERE id = $1`
+	query += ` WHERE id = $2`
 
 	tag, err := s.db.Pool.Exec(ctx, query, args...)
 	if err != nil {
