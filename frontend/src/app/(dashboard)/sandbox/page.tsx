@@ -11,7 +11,7 @@ import { FlaskConical, Zap, Play, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function SandboxPage() {
-  const [amount, setAmount] = useState("100");
+  const [amount, setAmount] = useState("5000");
   const [trafficCount, setTrafficCount] = useState("10");
   const [casinoId, setCasinoId] = useState("");
 
