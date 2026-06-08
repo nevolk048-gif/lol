@@ -66,18 +66,15 @@ func (c *MajorPayClient) CreateDeposit(ctx context.Context, req MajorPayDepositR
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/v1/deposit", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/payments", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	// Add headers
+	// Add headers as per MajorPay documentation
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("X-API-Key", c.apiKey)
-
-	// Sign request with HMAC
-	signature := c.signRequest(body)
-	httpReq.Header.Set("X-Signature", signature)
+	httpReq.Header.Set("merchant-id", c.apiKey)
+	httpReq.Header.Set("merchant-secret-key", c.secretKey)
 
 	resp, err := c.client.Do(httpReq)
 	if err != nil {
@@ -136,14 +133,14 @@ func (c *MajorPayClient) NotifyPayment(ctx context.Context, transactionID uuid.U
 		return fmt.Errorf("marshal payload: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/v1/transaction/"+transactionID.String()+"/status", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/transaction/"+transactionID.String()+"/status", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("X-API-Key", c.apiKey)
-	httpReq.Header.Set("X-Signature", c.signRequest(body))
+	httpReq.Header.Set("merchant-id", c.apiKey)
+	httpReq.Header.Set("merchant-secret-key", c.secretKey)
 
 	resp, err := c.client.Do(httpReq)
 	if err != nil {
