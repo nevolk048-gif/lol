@@ -145,12 +145,6 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 		VALUES ('ROUTING_SUCCESS', 'transaction', $1, $2)
 	`, txID, string(routingSuccessJSON))
 
-	if err := s.router.ReserveRequisiteLimit(ctx, routeResult.RequisiteID, req.Amount); err != nil {
-		_, _ = s.db.Pool.Exec(ctx, `UPDATE transactions SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`, txID)
-		resp.Status = models.TxStatusCancelled
-		return resp, nil
-	}
-
 	now := time.Now()
 	processingMs := time.Since(start).Milliseconds()
 	_, err = s.db.Pool.Exec(ctx, `
