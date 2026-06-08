@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["go_1_21"]
+
+[phases.build]
+cmds = ["cd backend && go mod download", "cd backend && go build -o bin/server ./cmd/server"]
+
+[start]
+cmd = "./backend/bin/server"
