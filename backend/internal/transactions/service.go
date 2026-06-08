@@ -103,11 +103,18 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 
 	if err != nil {
 		// Log routing error for debugging
+		routingErrorDetails := map[string]interface{}{
+			"error":      err.Error(),
+			"amount":     req.Amount,
+			"currency":   req.Currency,
+			"country":    req.Country,
+			"is_sandbox": isSandbox,
+		}
+		detailsJSON, _ := json.Marshal(routingErrorDetails)
 		_, _ = s.db.Pool.Exec(ctx, `
 			INSERT INTO audit_logs (action, entity_type, entity_id, details)
 			VALUES ('ROUTING_ERROR', 'transaction', $1, $2)
-		`, txID, fmt.Sprintf(`{"error":"%s","amount":%f,"currency":"%s","country":"%s","is_sandbox":%v}`,
-			err.Error(), req.Amount, req.Currency, req.Country, isSandbox))
+		`, txID, string(detailsJSON))
 
 		_, _ = s.db.Pool.Exec(ctx, `UPDATE transactions SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`, txID)
 		resp.Status = models.TxStatusCancelled
@@ -119,11 +126,16 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 	}
 
 	// Log successful routing
+	routingSuccessDetails := map[string]interface{}{
+		"provider_id":  routeResult.ProviderID.String(),
+		"requisite_id": routeResult.RequisiteID.String(),
+		"rule_id":      routeResult.RuleID.String(),
+	}
+	detailsJSON, _ := json.Marshal(routingSuccessDetails)
 	_, _ = s.db.Pool.Exec(ctx, `
 		INSERT INTO audit_logs (action, entity_type, entity_id, details)
 		VALUES ('ROUTING_SUCCESS', 'transaction', $1, $2)
-	`, txID, fmt.Sprintf(`{"provider_id":"%s","requisite_id":"%s","rule_id":"%s"}`,
-		routeResult.ProviderID, routeResult.RequisiteID, routeResult.RuleID))
+	`, txID, string(detailsJSON))
 
 	if err := s.router.ReserveRequisiteLimit(ctx, routeResult.RequisiteID, req.Amount); err != nil {
 		_, _ = s.db.Pool.Exec(ctx, `UPDATE transactions SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`, txID)
@@ -158,10 +170,16 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 	}
 
 	// DEBUG: Always log that we reached this point
+	debugDetails := map[string]interface{}{
+		"provider_id":   provider.ID.String(),
+		"provider_name": provider.Name,
+		"has_base_url":  provider.BaseURL != nil && *provider.BaseURL != "",
+	}
+	detailsJSON, _ := json.Marshal(debugDetails)
 	_, _ = s.db.Pool.Exec(ctx, `
 		INSERT INTO audit_logs (action, entity_type, entity_id, details)
 		VALUES ('DEBUG_PROVIDER_CHECK', 'transaction', $1, $2)
-	`, txID, fmt.Sprintf(`{"provider_id":"%s","provider_name":"%s","has_base_url":%v}`, provider.ID, provider.Name, provider.BaseURL != nil && *provider.BaseURL != ""))
+	`, txID, string(detailsJSON))
 
 	// Call provider API if base_url is configured
 	if provider.BaseURL != nil && *provider.BaseURL != "" {
@@ -191,24 +209,39 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 		if err != nil {
 			fmt.Printf("[ERROR] Provider API call failed: %v\n", err)
 			// Log error but don't fail the transaction
+			errorDetails := map[string]interface{}{
+				"error":        err.Error(),
+				"provider_url": *provider.BaseURL,
+			}
+			detailsJSON, _ := json.Marshal(errorDetails)
 			_, _ = s.db.Pool.Exec(ctx, `
 				INSERT INTO audit_logs (action, entity_type, entity_id, details)
 				VALUES ('PROVIDER_API_ERROR', 'transaction', $1, $2)
-			`, txID, fmt.Sprintf(`{"error":"%s","provider_url":"%s"}`, err.Error(), *provider.BaseURL))
+			`, txID, string(detailsJSON))
 		} else {
 			fmt.Printf("[SUCCESS] Provider API response: transaction_id=%s\n", providerResp.TransactionID)
 			// Log successful provider call
+			successDetails := map[string]interface{}{
+				"provider_transaction_id": providerResp.TransactionID.String(),
+				"provider_url":            *provider.BaseURL,
+			}
+			detailsJSON, _ := json.Marshal(successDetails)
 			_, _ = s.db.Pool.Exec(ctx, `
 				INSERT INTO audit_logs (action, entity_type, entity_id, details)
 				VALUES ('PROVIDER_API_CALLED', 'transaction', $1, $2)
-			`, txID, fmt.Sprintf(`{"provider_transaction_id":"%s","provider_url":"%s"}`, providerResp.TransactionID, *provider.BaseURL))
+			`, txID, string(detailsJSON))
 		}
 	} else {
 		fmt.Printf("[WARN] Provider %s has no base_url configured, skipping API call\n", provider.Name)
+		noURLDetails := map[string]interface{}{
+			"provider_id":   provider.ID.String(),
+			"provider_name": provider.Name,
+		}
+		detailsJSON, _ := json.Marshal(noURLDetails)
 		_, _ = s.db.Pool.Exec(ctx, `
 			INSERT INTO audit_logs (action, entity_type, entity_id, details)
 			VALUES ('PROVIDER_NO_URL', 'transaction', $1, $2)
-		`, txID, fmt.Sprintf(`{"provider_id":"%s","provider_name":"%s"}`, provider.ID, provider.Name))
+		`, txID, string(detailsJSON))
 	}
 
 	resp.Status = models.TxStatusWaitingPayment
