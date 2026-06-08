@@ -44,6 +44,10 @@ export interface Provider {
   ip_whitelist?: string[];
   status: EntityStatus;
   is_sandbox: boolean;
+  traffic_enabled?: boolean;
+  traffic_disabled_reason?: string;
+  traffic_disabled_at?: string;
+  traffic_disabled_by?: string;
   turnover?: number;
   transaction_count?: number;
   conversion_rate?: number;
