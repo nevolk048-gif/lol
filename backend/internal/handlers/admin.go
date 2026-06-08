@@ -114,6 +114,28 @@ func (h *AdminHandler) RegisterRoutes(rg *gin.RouterGroup, auth gin.HandlerFunc)
 		api.POST("/migrate", middleware.RequireRoles(models.RoleSuperAdmin), func(c *gin.Context) {
 			response.OK(c, gin.H{"message": "migrations run via Railway"})
 		})
+
+		// Server info endpoint to get Railway IP
+		api.GET("/server-info", func(c *gin.Context) {
+			// Get outgoing IP by calling external service
+			resp, err := http.Get("https://api.ipify.org?format=json")
+			if err != nil {
+				response.InternalError(c, "failed to get IP")
+				return
+			}
+			defer resp.Body.Close()
+
+			var ipData map[string]string
+			if err := json.NewDecoder(resp.Body).Decode(&ipData); err != nil {
+				response.InternalError(c, "failed to parse IP")
+				return
+			}
+
+			response.OK(c, gin.H{
+				"outgoing_ip": ipData["ip"],
+				"server_time": time.Now().UTC(),
+			})
+		})
 	}
 
 	// Debug endpoints (public for troubleshooting)
