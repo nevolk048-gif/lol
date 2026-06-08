@@ -67,6 +67,8 @@ func (h *WebhookHandler) MajorPayWebhook(c *gin.Context) {
 
 	// Log incoming webhook for debugging
 	fmt.Printf("[WEBHOOK] Received type=%s, provider_tx_id=%s\n", payload.Type, payload.Object.UUID)
+	fmt.Printf("[DEBUG] Raw body: %s\n", string(rawBody))
+	fmt.Printf("[DEBUG] Headers: timestamp=%s, signature=%s\n", timestamp, signature)
 
 	// Get provider secret key from database
 	var providerSecretKey string
@@ -82,6 +84,8 @@ func (h *WebhookHandler) MajorPayWebhook(c *gin.Context) {
 	}
 
 	fmt.Printf("[DEBUG] Verifying signature for provider_tx_id=%s\n", payload.Object.UUID)
+	fmt.Printf("[DEBUG] Data to sign: '%s'\n", timestamp + "." + payload.Object.UUID + "." + string(rawBody))
+	fmt.Printf("[DEBUG] Secret key length: %d\n", len(providerSecretKey))
 
 	// Verify signature: HMAC-SHA256(timestamp + "." + trade_id + "." + raw_body)
 	dataToSign := timestamp + "." + payload.Object.UUID + "." + string(rawBody)
