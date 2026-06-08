@@ -42,6 +42,10 @@ type MajorPayWebhookPayload struct {
 }
 
 func (h *WebhookHandler) MajorPayWebhook(c *gin.Context) {
+	// Generate unique request ID for debugging
+	requestID := uuid.New().String()[:8]
+	fmt.Printf("[WEBHOOK-%s] Started processing\n", requestID)
+
 	// Read raw body for signature verification
 	rawBody, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -66,9 +70,8 @@ func (h *WebhookHandler) MajorPayWebhook(c *gin.Context) {
 	}
 
 	// Log incoming webhook for debugging
-	fmt.Printf("[WEBHOOK] Received type=%s, provider_tx_id=%s\n", payload.Type, payload.Object.UUID)
-	fmt.Printf("[DEBUG] Raw body: %s\n", string(rawBody))
-	fmt.Printf("[DEBUG] Headers: timestamp=%s, signature=%s\n", timestamp, signature)
+	fmt.Printf("[WEBHOOK-%s] Received type=%s, provider_tx_id=%s\n", requestID, payload.Type, payload.Object.UUID)
+	fmt.Printf("[DEBUG-%s] Headers: timestamp=%s, signature=%s\n", requestID, timestamp, signature)
 
 	// Get provider secret key from database
 	var providerSecretKey string
@@ -83,9 +86,8 @@ func (h *WebhookHandler) MajorPayWebhook(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("[DEBUG] Verifying signature for provider_tx_id=%s\n", payload.Object.UUID)
-	fmt.Printf("[DEBUG] Data to sign: '%s'\n", timestamp + "." + payload.Object.UUID + "." + string(rawBody))
-	fmt.Printf("[DEBUG] Secret key length: %d\n", len(providerSecretKey))
+	fmt.Printf("[DEBUG-%s] Verifying signature for provider_tx_id=%s\n", requestID, payload.Object.UUID)
+	fmt.Printf("[DEBUG-%s] Secret key length: %d\n", requestID, len(providerSecretKey))
 
 	// Verify signature: HMAC-SHA256(timestamp + "." + trade_id + "." + raw_body)
 	dataToSign := timestamp + "." + payload.Object.UUID + "." + string(rawBody)
@@ -94,15 +96,15 @@ func (h *WebhookHandler) MajorPayWebhook(c *gin.Context) {
 	expectedSignature := hex.EncodeToString(mac.Sum(nil))
 
 	if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
-		fmt.Printf("[ERROR] Signature mismatch: expected=%s, got=%s\n", expectedSignature, signature)
+		fmt.Printf("[ERROR-%s] Signature mismatch: expected=%s, got=%s\n", requestID, expectedSignature, signature)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid signature"})
 		return
 	}
 
-	fmt.Printf("[SUCCESS] Signature verified for provider_tx_id=%s\n", payload.Object.UUID)
+	fmt.Printf("[SUCCESS-%s] Signature verified for provider_tx_id=%s\n", requestID, payload.Object.UUID)
 
 	// Find transaction by provider transaction ID
-	fmt.Printf("[DEBUG] Searching for transaction with provider_transaction_id='%s'\n", payload.Object.UUID)
+	fmt.Printf("[DEBUG-%s] Searching for transaction with provider_transaction_id='%s'\n", requestID, payload.Object.UUID)
 
 	var txID uuid.UUID
 
