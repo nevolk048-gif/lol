@@ -233,11 +233,19 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 			fmt.Printf("[SUCCESS] Provider API response: transaction_id=%s\n", providerResp.TransactionID)
 
 			// Save provider transaction ID for webhook matching
-			_, _ = s.db.Pool.Exec(ctx, `
+			result, err := s.db.Pool.Exec(ctx, `
 				UPDATE transactions
 				SET provider_transaction_id = $2, updated_at = NOW()
 				WHERE id = $1
 			`, txID, providerResp.TransactionID)
+
+			if err != nil {
+				fmt.Printf("[ERROR] Failed to save provider_transaction_id: %v\n", err)
+			} else {
+				rowsAffected := result.RowsAffected()
+				fmt.Printf("[DEBUG] Saved provider_transaction_id='%s' for transaction %s (rows affected: %d)\n",
+					providerResp.TransactionID, txID, rowsAffected)
+			}
 
 			// Log successful provider call
 			successDetails := map[string]interface{}{
