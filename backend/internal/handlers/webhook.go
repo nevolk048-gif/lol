@@ -91,6 +91,8 @@ func (h *WebhookHandler) MajorPayWebhook(c *gin.Context) {
 	}
 
 	// Find transaction by provider transaction ID
+	fmt.Printf("[DEBUG] Searching for transaction with provider_transaction_id='%s'\n", payload.Object.UUID)
+
 	var txID uuid.UUID
 	err = h.db.Pool.QueryRow(c.Request.Context(), `
 		SELECT id FROM transactions
