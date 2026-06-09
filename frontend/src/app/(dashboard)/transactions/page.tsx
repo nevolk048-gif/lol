@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { type ColumnDef } from "@tanstack/react-table";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { api } from "@/services/api";
 import { DataTable } from "@/components/widgets/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate, truncate } from "@/lib/utils";
-import type { Transaction, TransactionStatus } from "@/types";
+import type { Dispute, Transaction, TransactionStatus } from "@/types";
 import { Filter, PlayCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -38,6 +38,30 @@ export default function TransactionsPage() {
         per_page: "50",
       }),
   });
+
+  // Споры по транзакциям — чтобы показывать индикатор спора в карточке транзакции
+  const { data: disputesData } = useQuery({
+    queryKey: ["disputes"],
+    queryFn: () => api.getDisputes() as Promise<Dispute[]>,
+  });
+
+  const disputeByTx = useMemo(() => {
+    const map = new Map<string, Dispute>();
+    (disputesData ?? []).forEach((d) => {
+      // оставляем самый свежий спор по транзакции (список уже отсортирован по дате убыв.)
+      if (!map.has(d.transaction_id)) map.set(d.transaction_id, d);
+    });
+    return map;
+  }, [disputesData]);
+
+  const disputeStatusText: Record<string, string> = {
+    NEW: "Новый",
+    UNDER_REVIEW: "На рассмотрении",
+    AWAITING_PROVIDER_RESPONSE: "Ожидает ответа",
+    MERCHANT_WON: "Мерчант выиграл",
+    PROVIDER_WON: "Провайдер выиграл",
+    CLOSED: "Закрыт",
+  };
 
   const simulatePaymentMutation = useMutation({
     mutationFn: (transactionId: string) => api.sandboxSimulatePayment(transactionId),
@@ -96,6 +120,23 @@ export default function TransactionsPage() {
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => <Badge status={row.original.status}>{row.original.status.replace("_", " ")}</Badge>,
+    },
+    {
+      id: "dispute",
+      header: "Спор",
+      cell: ({ row }) => {
+        const dispute = disputeByTx.get(row.original.id);
+        if (!dispute) return <span className="text-muted-foreground text-xs">—</span>;
+        return (
+          <span
+            className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800"
+            title={`Спор #${dispute.id.slice(0, 8)}: ${dispute.reason}`}
+          >
+            <AlertTriangle className="h-3 w-3" />
+            {disputeStatusText[dispute.status] ?? dispute.status}
+          </span>
+        );
+      },
     },
     {
       accessorKey: "created_at",

@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, MessageSquare, Send } from "lucide-react";
 import { toast } from "sonner";
+import { api } from "@/services/api";
 
 interface Dispute {
   id: string;
@@ -40,84 +41,48 @@ export default function DisputesPage() {
   const [newMessage, setNewMessage] = useState("");
   const queryClient = useQueryClient();
 
-  // Fetch disputes
+  // Fetch disputes (через общий API-клиент: корректный префикс /api/v1 + конверт {success,data})
   const { data: disputes, isLoading } = useQuery({
     queryKey: ["disputes", statusFilter],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (statusFilter !== "all") params.append("status", statusFilter);
-
-      const token = localStorage.getItem("access_token");
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/disputes?${params}`, {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
-      });
-      if (!res.ok) throw new Error("Failed to fetch disputes");
-      const data = await res.json();
-      return data.success ? data.data : data;
-    },
+    queryFn: () =>
+      api.getDisputes(statusFilter !== "all" ? { status: statusFilter } : undefined) as Promise<Dispute[]>,
   });
 
   // Fetch dispute messages
   const { data: messages } = useQuery({
     queryKey: ["dispute-messages", selectedDispute?.id],
-    queryFn: async () => {
-      if (!selectedDispute) return [];
-      const token = localStorage.getItem("access_token");
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/disputes/${selectedDispute.id}/messages`, {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
-      });
-      if (!res.ok) throw new Error("Failed to fetch messages");
-      const data = await res.json();
-      return data.success ? data.data : data;
-    },
+    queryFn: () =>
+      selectedDispute
+        ? (api.getDisputeMessages(selectedDispute.id) as Promise<DisputeMessage[]>)
+        : Promise.resolve([] as DisputeMessage[]),
     enabled: !!selectedDispute,
   });
 
   // Update status mutation
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ disputeId, status }: { disputeId: string; status: string }) => {
-      const token = localStorage.getItem("access_token");
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/disputes/${disputeId}/status`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status }),
-      });
-      if (!res.ok) throw new Error("Failed to update status");
-      return res.json();
-    },
+    mutationFn: ({ disputeId, status }: { disputeId: string; status: string }) =>
+      api.updateDisputeStatus(disputeId, status),
     onSuccess: () => {
       toast.success("Статус спора обновлен");
       queryClient.invalidateQueries({ queryKey: ["disputes"] });
       setSelectedDispute(null);
     },
+    onError: () => {
+      toast.error("Не удалось обновить статус спора");
+    },
   });
 
   // Send message mutation
   const sendMessageMutation = useMutation({
-    mutationFn: async ({ disputeId, message }: { disputeId: string; message: string }) => {
-      const token = localStorage.getItem("access_token");
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/disputes/${disputeId}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({ message }),
-      });
-      if (!res.ok) throw new Error("Failed to send message");
-      return res.json();
-    },
+    mutationFn: ({ disputeId, message }: { disputeId: string; message: string }) =>
+      api.addDisputeMessage(disputeId, message),
     onSuccess: () => {
       toast.success("Сообщение отправлено");
       queryClient.invalidateQueries({ queryKey: ["dispute-messages"] });
       setNewMessage("");
+    },
+    onError: () => {
+      toast.error("Не удалось отправить сообщение");
     },
   });
 

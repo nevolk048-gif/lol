@@ -72,6 +72,9 @@ func (s *Service) CreateDispute(ctx context.Context, req CreateDisputeRequest) (
 		return nil, fmt.Errorf("create dispute: %w", err)
 	}
 
+	fmt.Printf("[DISPUTE] created id=%s linked to transaction=%s provider=%s casino=%s amount=%.2f %s status=%s\n",
+		dispute.ID, dispute.TransactionID, dispute.ProviderID, dispute.CasinoID, dispute.Amount, dispute.Currency, dispute.Status)
+
 	// Автоматически блокируем трафик провайдера
 	now := time.Now()
 	blockReason := fmt.Sprintf("Автоматическая блокировка: создан спор #%s", dispute.ID.String()[:8])
@@ -115,10 +118,27 @@ func (s *Service) CreateDispute(ctx context.Context, req CreateDisputeRequest) (
 		return nil, fmt.Errorf("commit transaction: %w", err)
 	}
 
+	fmt.Printf("[DISPUTE] persisted id=%s and provider %s traffic disabled\n", dispute.ID, providerID)
+
 	// Отправляем webhook провайдеру о создании спора (асинхронно)
 	go s.notifyProviderAboutDispute(context.Background(), dispute, providerID)
 
 	return dispute, nil
+}
+
+// HasOpenDispute проверяет, есть ли уже незакрытый спор по транзакции.
+// Используется webhook-обработчиком, чтобы не создавать дубли при входящем уведомлении провайдера.
+func (s *Service) HasOpenDispute(ctx context.Context, transactionID uuid.UUID) (bool, error) {
+	var count int
+	err := s.db.Pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM disputes
+		WHERE transaction_id = $1
+		  AND status NOT IN ('MERCHANT_WON', 'PROVIDER_WON', 'CLOSED')
+	`, transactionID).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("check open dispute: %w", err)
+	}
+	return count > 0, nil
 }
 
 // notifyProviderAboutDispute отправляет webhook провайдеру о создании спора
@@ -188,10 +208,11 @@ func (s *Service) GetDispute(ctx context.Context, disputeID uuid.UUID) (*models.
 	err := s.db.Pool.QueryRow(ctx, `
 		SELECT d.id, d.transaction_id, d.provider_id, d.casino_id, d.status, d.reason,
 		       d.amount, d.currency, d.created_by, d.resolved_by, d.resolved_at,
-		       d.created_at, d.updated_at, p.name as provider_name, c.name as casino_name
+		       d.created_at, d.updated_at,
+		       COALESCE(p.name, '') as provider_name, COALESCE(c.name, '') as casino_name
 		FROM disputes d
-		JOIN providers p ON d.provider_id = p.id
-		JOIN casinos c ON d.casino_id = c.id
+		LEFT JOIN providers p ON d.provider_id = p.id
+		LEFT JOIN casinos c ON d.casino_id = c.id
 		WHERE d.id = $1
 	`, disputeID).Scan(
 		&dispute.ID, &dispute.TransactionID, &dispute.ProviderID, &dispute.CasinoID,
@@ -207,15 +228,17 @@ func (s *Service) GetDispute(ctx context.Context, disputeID uuid.UUID) (*models.
 	return &dispute, nil
 }
 
-// ListDisputes получает список споров с фильтрами
-func (s *Service) ListDisputes(ctx context.Context, filter DisputeFilter) ([]models.Dispute, error) {
+// buildListDisputesQuery собирает SQL-запрос и аргументы для списка споров.
+// Вынесено отдельно, чтобы покрыть логику фильтров и пагинации юнит-тестами без БД.
+func buildListDisputesQuery(filter DisputeFilter) (string, []interface{}) {
 	query := `
 		SELECT d.id, d.transaction_id, d.provider_id, d.casino_id, d.status, d.reason,
 		       d.amount, d.currency, d.created_by, d.resolved_by, d.resolved_at,
-		       d.created_at, d.updated_at, p.name as provider_name, c.name as casino_name
+		       d.created_at, d.updated_at,
+		       COALESCE(p.name, '') as provider_name, COALESCE(c.name, '') as casino_name
 		FROM disputes d
-		JOIN providers p ON d.provider_id = p.id
-		JOIN casinos c ON d.casino_id = c.id
+		LEFT JOIN providers p ON d.provider_id = p.id
+		LEFT JOIN casinos c ON d.casino_id = c.id
 		WHERE 1=1
 	`
 
@@ -247,13 +270,21 @@ func (s *Service) ListDisputes(ctx context.Context, filter DisputeFilter) ([]mod
 		args = append(args, filter.Limit, filter.Offset)
 	}
 
+	return query, args
+}
+
+// ListDisputes получает список споров с фильтрами
+func (s *Service) ListDisputes(ctx context.Context, filter DisputeFilter) ([]models.Dispute, error) {
+	query, args := buildListDisputesQuery(filter)
+
 	rows, err := s.db.Pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query disputes: %w", err)
 	}
 	defer rows.Close()
 
-	var disputes []models.Dispute
+	// Возвращаем непустой слайс, чтобы API отдавал [] вместо null
+	disputes := []models.Dispute{}
 	for rows.Next() {
 		var d models.Dispute
 		err := rows.Scan(
@@ -268,7 +299,21 @@ func (s *Service) ListDisputes(ctx context.Context, filter DisputeFilter) ([]mod
 		disputes = append(disputes, d)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate disputes: %w", err)
+	}
+
+	fmt.Printf("[DISPUTE] list returned %d disputes (status=%v provider=%v casino=%v)\n",
+		len(disputes), filter.Status, filter.ProviderID, filter.CasinoID)
+
 	return disputes, nil
+}
+
+// isResolvedStatus сообщает, является ли статус терминальным (спор разрешён/закрыт).
+func isResolvedStatus(status models.DisputeStatus) bool {
+	return status == models.DisputeClosed ||
+		status == models.DisputeMerchantWon ||
+		status == models.DisputeProviderWon
 }
 
 // UpdateStatus обновляет статус спора
@@ -284,7 +329,7 @@ func (s *Service) UpdateStatus(ctx context.Context, disputeID uuid.UUID, status 
 	var resolvedBy *uuid.UUID
 
 	// Если спор разрешен, сохраняем время и пользователя
-	if status == models.DisputeClosed || status == models.DisputeMerchantWon || status == models.DisputeProviderWon {
+	if isResolvedStatus(status) {
 		resolvedAt = &now
 		resolvedBy = userID
 	}
@@ -310,7 +355,12 @@ func (s *Service) UpdateStatus(ctx context.Context, disputeID uuid.UUID, status 
 		return fmt.Errorf("add history: %w", err)
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+
+	fmt.Printf("[DISPUTE] updated id=%s new_status=%s\n", disputeID, status)
+	return nil
 }
 
 // AddMessage добавляет сообщение в спор

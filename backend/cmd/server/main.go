@@ -112,7 +112,7 @@ func main() {
 		analyticsSvc, auditSvc, sandboxSvc, txSvc, hub,
 	)
 	providerHandler := handlers.NewProviderAPIHandler(txSvc, db)
-	webhookHandler := handlers.NewWebhookHandler(db, txSvc)
+	webhookHandler := handlers.NewWebhookHandler(db, txSvc, disputeSvc)
 	disputeHandler := handlers.NewDisputeHandler(disputeSvc)
 	trafficHandler := handlers.NewTrafficHandler(trafficSvc)
 	sandboxHandler := handlers.NewSandboxHandler(sandboxSvc)

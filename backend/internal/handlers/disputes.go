@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -87,10 +88,12 @@ func (h *DisputeHandler) ListDisputes(c *gin.Context) {
 
 	disputeList, err := h.disputeService.ListDisputes(c.Request.Context(), filter)
 	if err != nil {
+		fmt.Printf("[DISPUTE-API] list error: %v\n", err)
 		response.InternalError(c, "failed to list disputes")
 		return
 	}
 
+	fmt.Printf("[DISPUTE-API] displayed in API: %d disputes\n", len(disputeList))
 	response.OK(c, disputeList)
 }
 

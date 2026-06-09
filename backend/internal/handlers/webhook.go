@@ -12,18 +12,30 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/paymentsgate/paymentsgate/internal/disputes"
 	"github.com/paymentsgate/paymentsgate/internal/transactions"
 	"github.com/paymentsgate/paymentsgate/pkg/database"
 	"github.com/paymentsgate/paymentsgate/pkg/models"
 )
 
 type WebhookHandler struct {
-	db     *database.DB
-	txSvc  *transactions.Service
+	db         *database.DB
+	txSvc      *transactions.Service
+	disputeSvc *disputes.Service
 }
 
-func NewWebhookHandler(db *database.DB, txSvc *transactions.Service) *WebhookHandler {
-	return &WebhookHandler{db: db, txSvc: txSvc}
+func NewWebhookHandler(db *database.DB, txSvc *transactions.Service, disputeSvc *disputes.Service) *WebhookHandler {
+	return &WebhookHandler{db: db, txSvc: txSvc, disputeSvc: disputeSvc}
+}
+
+// isDisputeEvent сообщает, является ли тип webhook-события спором/чарджбэком.
+func isDisputeEvent(eventType string) bool {
+	switch eventType {
+	case "dispute.created", "dispute", "chargeback", "chargeback.created",
+		"payment.chargeback", "payment.dispute":
+		return true
+	}
+	return false
 }
 
 func (h *WebhookHandler) RegisterRoutes(rg *gin.RouterGroup) {
@@ -160,6 +172,12 @@ func (h *WebhookHandler) MajorPayWebhook(c *gin.Context) {
 
 	fmt.Printf("[SUCCESS] Found transaction %s for provider_tx_id=%s\n", txID, payload.Object.UUID)
 
+	// Входящее уведомление о споре/чарджбэке от провайдера
+	if isDisputeEvent(payload.Type) {
+		h.handleDisputeWebhook(c, requestID, txID, payload)
+		return
+	}
+
 	// Map MajorPay status to our status
 	var newStatus models.TransactionStatus
 	switch payload.Type {
@@ -196,4 +214,47 @@ func (h *WebhookHandler) MajorPayWebhook(c *gin.Context) {
 
 	// MUST return 200 OK
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+// handleDisputeWebhook обрабатывает входящее уведомление о споре/чарджбэке от провайдера:
+// создаёт спор (если ещё нет открытого) и автоматически блокирует трафик провайдера.
+func (h *WebhookHandler) handleDisputeWebhook(c *gin.Context, requestID string, txID uuid.UUID, payload MajorPayWebhookPayload) {
+	ctx := c.Request.Context()
+	fmt.Printf("[DISPUTE-WEBHOOK-%s] dispute webhook received: type=%s transaction=%s provider_tx_id=%s\n",
+		requestID, payload.Type, txID, payload.Object.UUID)
+
+	if h.disputeSvc == nil {
+		fmt.Printf("[DISPUTE-WEBHOOK-%s] dispute service unavailable\n", requestID)
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		return
+	}
+
+	// Дедупликация: не создаём второй открытый спор по той же транзакции
+	hasOpen, err := h.disputeSvc.HasOpenDispute(ctx, txID)
+	if err != nil {
+		fmt.Printf("[DISPUTE-WEBHOOK-%s] failed to check existing disputes: %v\n", requestID, err)
+	} else if hasOpen {
+		fmt.Printf("[DISPUTE-WEBHOOK-%s] open dispute already exists for transaction %s, skipping\n", requestID, txID)
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "dispute": "already_exists"})
+		return
+	}
+
+	reason := fmt.Sprintf("Автоматический спор по уведомлению провайдера (event=%s, provider_tx_id=%s)",
+		payload.Type, payload.Object.UUID)
+
+	dispute, err := h.disputeSvc.CreateDispute(ctx, disputes.CreateDisputeRequest{
+		TransactionID: txID,
+		Reason:        reason,
+		CreatedBy:     nil, // инициатор — провайдер, пользователь отсутствует
+	})
+	if err != nil {
+		fmt.Printf("[DISPUTE-WEBHOOK-%s] failed to create dispute for transaction %s: %v\n", requestID, txID, err)
+		// Возвращаем 200, чтобы провайдер не ретраил бесконечно
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		return
+	}
+
+	fmt.Printf("[DISPUTE-WEBHOOK-%s] dispute created id=%s for transaction %s (provider traffic blocked)\n",
+		requestID, dispute.ID, txID)
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "dispute_id": dispute.ID.String()})
 }
