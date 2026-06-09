@@ -51,7 +51,11 @@ class ApiClient {
     if (!res.ok || !json.success) {
       throw new Error(json.error?.message || "Request failed");
     }
-    return json.data ?? json;
+    // Успешный ответ всегда обёрнут в конверт {success,data}. Возвращаем только data.
+    // ВАЖНО: раньше здесь было `json.data ?? json`, из-за чего при data===null
+    // наружу уходил весь объект-конверт, и вызовы вроде disputes.map() падали
+    // ("map is not a function"). Теперь при отсутствии data вернётся null.
+    return (json.data ?? null) as T;
   }
 
   // Auth

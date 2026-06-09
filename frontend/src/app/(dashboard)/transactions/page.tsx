@@ -47,9 +47,10 @@ export default function TransactionsPage() {
 
   const disputeByTx = useMemo(() => {
     const map = new Map<string, Dispute>();
-    (disputesData ?? []).forEach((d) => {
+    const list = Array.isArray(disputesData) ? disputesData : [];
+    list.forEach((d) => {
       // оставляем самый свежий спор по транзакции (список уже отсортирован по дате убыв.)
-      if (!map.has(d.transaction_id)) map.set(d.transaction_id, d);
+      if (d?.transaction_id && !map.has(d.transaction_id)) map.set(d.transaction_id, d);
     });
     return map;
   }, [disputesData]);
@@ -130,7 +131,7 @@ export default function TransactionsPage() {
         return (
           <span
             className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800"
-            title={`Спор #${dispute.id.slice(0, 8)}: ${dispute.reason}`}
+            title={`Спор #${String(dispute.id ?? "").slice(0, 8)}: ${dispute.reason ?? ""}`}
           >
             <AlertTriangle className="h-3 w-3" />
             {disputeStatusText[dispute.status] ?? dispute.status}

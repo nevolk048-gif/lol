@@ -42,19 +42,23 @@ export default function DisputesPage() {
   const queryClient = useQueryClient();
 
   // Fetch disputes (через общий API-клиент: корректный префикс /api/v1 + конверт {success,data})
+  // Жёстко приводим к массиву, чтобы рендер не падал, если API вернёт null/объект.
   const { data: disputes, isLoading } = useQuery({
     queryKey: ["disputes", statusFilter],
-    queryFn: () =>
-      api.getDisputes(statusFilter !== "all" ? { status: statusFilter } : undefined) as Promise<Dispute[]>,
+    queryFn: async () => {
+      const raw = await api.getDisputes(statusFilter !== "all" ? { status: statusFilter } : undefined);
+      return (Array.isArray(raw) ? raw : []) as Dispute[];
+    },
   });
 
   // Fetch dispute messages
   const { data: messages } = useQuery({
     queryKey: ["dispute-messages", selectedDispute?.id],
-    queryFn: () =>
-      selectedDispute
-        ? (api.getDisputeMessages(selectedDispute.id) as Promise<DisputeMessage[]>)
-        : Promise.resolve([] as DisputeMessage[]),
+    queryFn: async () => {
+      if (!selectedDispute) return [] as DisputeMessage[];
+      const raw = await api.getDisputeMessages(selectedDispute.id);
+      return (Array.isArray(raw) ? raw : []) as DisputeMessage[];
+    },
     enabled: !!selectedDispute,
   });
 
@@ -110,6 +114,18 @@ export default function DisputesPage() {
     return texts[status] || status;
   };
 
+  // Безопасное укорачивание id (не падает, если id отсутствует/не строка)
+  const shortId = (id: unknown) => String(id ?? "").slice(0, 8) || "—";
+
+  // Безопасное форматирование даты (не выбрасывает на пустом/битом значении)
+  const formatDateTime = (value?: string) => {
+    if (!value) return "—";
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? "—" : d.toLocaleString("ru");
+  };
+
+  const disputeList: Dispute[] = Array.isArray(disputes) ? disputes : [];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -147,14 +163,17 @@ export default function DisputesPage() {
       {/* Disputes List */}
       <div className="grid gap-4">
         {isLoading && <div>Загрузка...</div>}
-        {disputes?.map((dispute: Dispute) => (
-          <Card key={dispute.id} className="hover:shadow-md transition-shadow">
+        {!isLoading && disputeList.length === 0 && (
+          <div className="text-center text-muted-foreground py-8">Споров нет</div>
+        )}
+        {disputeList.map((dispute: Dispute, idx: number) => (
+          <Card key={dispute.id || dispute.transaction_id || idx} className="hover:shadow-md transition-shadow">
             <CardContent className="pt-6">
               <div className="flex items-start justify-between">
                 <div className="space-y-2 flex-1">
                   <div className="flex items-center gap-3">
                     <AlertTriangle className="h-5 w-5 text-orange-500" />
-                    <h3 className="font-semibold">Спор #{dispute.id.slice(0, 8)}</h3>
+                    <h3 className="font-semibold">Спор #{shortId(dispute.id)}</h3>
                     <Badge className={getStatusBadge(dispute.status)}>
                       {getStatusText(dispute.status)}
                     </Badge>
@@ -171,11 +190,11 @@ export default function DisputesPage() {
                     </div>
                     <div>
                       <span className="text-muted-foreground">Сумма:</span>{" "}
-                      <span className="font-medium">{dispute.amount} {dispute.currency}</span>
+                      <span className="font-medium">{dispute.amount ?? 0} {dispute.currency ?? ""}</span>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Создан:</span>{" "}
-                      <span className="font-medium">{new Date(dispute.created_at).toLocaleString('ru')}</span>
+                      <span className="font-medium">{formatDateTime(dispute.created_at)}</span>
                     </div>
                   </div>
 
@@ -199,17 +218,17 @@ export default function DisputesPage() {
                     </DialogTrigger>
                     <DialogContent className="max-w-2xl max-h-[600px]">
                       <DialogHeader>
-                        <DialogTitle>Спор #{dispute.id.slice(0, 8)} - Сообщения</DialogTitle>
+                        <DialogTitle>Спор #{shortId(dispute.id)} - Сообщения</DialogTitle>
                       </DialogHeader>
 
                       <div className="space-y-4">
                         {/* Messages */}
                         <div className="h-[300px] overflow-y-auto space-y-3 border rounded-lg p-4">
-                          {messages?.map((msg: DisputeMessage) => (
-                            <div key={msg.id} className={`p-3 rounded ${msg.sender_type === 'ADMIN' ? 'bg-blue-50' : 'bg-gray-50'}`}>
+                          {(messages ?? []).map((msg: DisputeMessage, mIdx: number) => (
+                            <div key={msg.id || mIdx} className={`p-3 rounded ${msg.sender_type === 'ADMIN' ? 'bg-blue-50' : 'bg-gray-50'}`}>
                               <div className="flex justify-between text-xs text-muted-foreground mb-1">
                                 <span className="font-medium">{msg.sender_type}</span>
-                                <span>{new Date(msg.created_at).toLocaleString('ru')}</span>
+                                <span>{formatDateTime(msg.created_at)}</span>
                               </div>
                               <p className="text-sm">{msg.message}</p>
                             </div>
