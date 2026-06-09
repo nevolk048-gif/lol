@@ -65,6 +65,9 @@ func (s *Service) CreateDispute(ctx context.Context, req CreateDisputeRequest) (
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
 	}
+	if providerTxID != nil {
+		dispute.ProviderTransactionID = *providerTxID
+	}
 
 	_, err = tx.Exec(ctx, `
 		INSERT INTO disputes
@@ -128,9 +131,13 @@ func (s *Service) CreateDispute(ctx context.Context, req CreateDisputeRequest) (
 
 	// Отправляем уведомление в Telegram (асинхронно, не блокируем ответ)
 	go func() {
+		displayID := dispute.TransactionID.String()
+		if dispute.ProviderTransactionID != "" {
+			displayID = dispute.ProviderTransactionID
+		}
 		msg := fmt.Sprintf(
 			"<b>Новый спор по сделке:</b>\n<code>%s</code>\n\nСумма: <b>%.2f %s</b>\nПричина: %s",
-			dispute.TransactionID, dispute.Amount, dispute.Currency, dispute.Reason,
+			displayID, dispute.Amount, dispute.Currency, dispute.Reason,
 		)
 		if err := s.tg.Send(context.Background(), msg); err != nil {
 			fmt.Printf("[TELEGRAM] failed to notify: %v\n", err)
@@ -318,16 +325,19 @@ func (s *Service) GetDispute(ctx context.Context, disputeID uuid.UUID) (*models.
 		SELECT d.id, d.transaction_id, d.provider_id, d.casino_id, d.status, d.reason,
 		       d.amount, d.currency, d.created_by, d.resolved_by, d.resolved_at,
 		       d.created_at, d.updated_at,
-		       COALESCE(p.name, '') as provider_name, COALESCE(c.name, '') as casino_name
+		       COALESCE(p.name, '') as provider_name, COALESCE(c.name, '') as casino_name,
+		       COALESCE(t.provider_transaction_id, '') as provider_transaction_id
 		FROM disputes d
 		LEFT JOIN providers p ON d.provider_id = p.id
 		LEFT JOIN casinos c ON d.casino_id = c.id
+		LEFT JOIN transactions t ON d.transaction_id = t.id
 		WHERE d.id = $1
 	`, disputeID).Scan(
 		&dispute.ID, &dispute.TransactionID, &dispute.ProviderID, &dispute.CasinoID,
 		&dispute.Status, &dispute.Reason, &dispute.Amount, &dispute.Currency,
 		&dispute.CreatedBy, &dispute.ResolvedBy, &dispute.ResolvedAt,
 		&dispute.CreatedAt, &dispute.UpdatedAt, &dispute.ProviderName, &dispute.CasinoName,
+		&dispute.ProviderTransactionID,
 	)
 
 	if err != nil {
@@ -344,10 +354,12 @@ func buildListDisputesQuery(filter DisputeFilter) (string, []interface{}) {
 		SELECT d.id, d.transaction_id, d.provider_id, d.casino_id, d.status, d.reason,
 		       d.amount, d.currency, d.created_by, d.resolved_by, d.resolved_at,
 		       d.created_at, d.updated_at,
-		       COALESCE(p.name, '') as provider_name, COALESCE(c.name, '') as casino_name
+		       COALESCE(p.name, '') as provider_name, COALESCE(c.name, '') as casino_name,
+		       COALESCE(t.provider_transaction_id, '') as provider_transaction_id
 		FROM disputes d
 		LEFT JOIN providers p ON d.provider_id = p.id
 		LEFT JOIN casinos c ON d.casino_id = c.id
+		LEFT JOIN transactions t ON d.transaction_id = t.id
 		WHERE 1=1
 	`
 
@@ -401,6 +413,7 @@ func (s *Service) ListDisputes(ctx context.Context, filter DisputeFilter) ([]mod
 			&d.Status, &d.Reason, &d.Amount, &d.Currency,
 			&d.CreatedBy, &d.ResolvedBy, &d.ResolvedAt,
 			&d.CreatedAt, &d.UpdatedAt, &d.ProviderName, &d.CasinoName,
+			&d.ProviderTransactionID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan dispute: %w", err)

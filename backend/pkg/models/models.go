@@ -106,25 +106,26 @@ type Requisite struct {
 }
 
 type Transaction struct {
-	ID              uuid.UUID         `json:"id"`
-	ExternalID      *string           `json:"external_id,omitempty"`
-	CasinoID        uuid.UUID         `json:"casino_id"`
-	ProviderID      *uuid.UUID        `json:"provider_id,omitempty"`
-	RequisiteID     *uuid.UUID        `json:"requisite_id,omitempty"`
-	Amount          float64           `json:"amount"`
-	Currency        string            `json:"currency"`
-	Country         string            `json:"country"`
-	Status          TransactionStatus `json:"status"`
-	PlayerID        *string           `json:"player_id,omitempty"`
-	IsSandbox       bool              `json:"is_sandbox"`
-	ProcessingMs    *int64            `json:"processing_ms,omitempty"`
-	CreatedAt       time.Time         `json:"created_at"`
-	UpdatedAt       time.Time         `json:"updated_at"`
-	AssignedAt      *time.Time        `json:"assigned_at,omitempty"`
-	PaidAt          *time.Time        `json:"paid_at,omitempty"`
-	CasinoName      string            `json:"casino_name,omitempty"`
-	ProviderName    string            `json:"provider_name,omitempty"`
-	RequisiteBank   string            `json:"requisite_bank,omitempty"`
+	ID                    uuid.UUID         `json:"id"`
+	ExternalID            *string           `json:"external_id,omitempty"`
+	ProviderTransactionID *string           `json:"provider_transaction_id,omitempty"`
+	CasinoID              uuid.UUID         `json:"casino_id"`
+	ProviderID            *uuid.UUID        `json:"provider_id,omitempty"`
+	RequisiteID           *uuid.UUID        `json:"requisite_id,omitempty"`
+	Amount                float64           `json:"amount"`
+	Currency              string            `json:"currency"`
+	Country               string            `json:"country"`
+	Status                TransactionStatus `json:"status"`
+	PlayerID              *string           `json:"player_id,omitempty"`
+	IsSandbox             bool              `json:"is_sandbox"`
+	ProcessingMs          *int64            `json:"processing_ms,omitempty"`
+	CreatedAt             time.Time         `json:"created_at"`
+	UpdatedAt             time.Time         `json:"updated_at"`
+	AssignedAt            *time.Time        `json:"assigned_at,omitempty"`
+	PaidAt                *time.Time        `json:"paid_at,omitempty"`
+	CasinoName            string            `json:"casino_name,omitempty"`
+	ProviderName          string            `json:"provider_name,omitempty"`
+	RequisiteBank         string            `json:"requisite_bank,omitempty"`
 }
 
 type RouteRule struct {
@@ -261,22 +262,23 @@ type MerchantBalanceTransaction struct {
 
 // Dispute
 type Dispute struct {
-	ID            uuid.UUID      `json:"id"`
-	TransactionID uuid.UUID      `json:"transaction_id"`
-	ProviderID    uuid.UUID      `json:"provider_id"`
-	CasinoID      uuid.UUID      `json:"casino_id"`
-	Status        DisputeStatus  `json:"status"`
-	Reason        string         `json:"reason"`
-	Amount        float64        `json:"amount"`
-	Currency      string         `json:"currency"`
-	CreatedBy     *uuid.UUID     `json:"created_by,omitempty"`
-	ResolvedBy    *uuid.UUID     `json:"resolved_by,omitempty"`
-	ResolvedAt    *time.Time     `json:"resolved_at,omitempty"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
+	ID                    uuid.UUID     `json:"id"`
+	TransactionID         uuid.UUID     `json:"transaction_id"`
+	ProviderTransactionID string        `json:"provider_transaction_id,omitempty"`
+	ProviderID            uuid.UUID     `json:"provider_id"`
+	CasinoID              uuid.UUID     `json:"casino_id"`
+	Status                DisputeStatus `json:"status"`
+	Reason                string        `json:"reason"`
+	Amount                float64       `json:"amount"`
+	Currency              string        `json:"currency"`
+	CreatedBy             *uuid.UUID    `json:"created_by,omitempty"`
+	ResolvedBy            *uuid.UUID    `json:"resolved_by,omitempty"`
+	ResolvedAt            *time.Time    `json:"resolved_at,omitempty"`
+	CreatedAt             time.Time     `json:"created_at"`
+	UpdatedAt             time.Time     `json:"updated_at"`
 	// Joined fields
-	ProviderName  string         `json:"provider_name,omitempty"`
-	CasinoName    string         `json:"casino_name,omitempty"`
+	ProviderName          string        `json:"provider_name,omitempty"`
+	CasinoName            string        `json:"casino_name,omitempty"`
 }
 
 // Dispute Message

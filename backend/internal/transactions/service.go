@@ -313,7 +313,8 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*models.Transactio
 		SELECT t.id, t.external_id, t.casino_id, t.provider_id, t.requisite_id,
 		       t.amount, t.currency, t.country, t.status, t.player_id, t.is_sandbox,
 		       t.processing_ms, t.created_at, t.updated_at, t.assigned_at, t.paid_at,
-		       COALESCE(c.name, ''), COALESCE(p.name, ''), COALESCE(r.bank_name, '')
+		       COALESCE(c.name, ''), COALESCE(p.name, ''), COALESCE(r.bank_name, ''),
+		       t.provider_transaction_id
 		FROM transactions t
 		LEFT JOIN casinos c ON c.id = t.casino_id
 		LEFT JOIN providers p ON p.id = t.provider_id
@@ -371,7 +372,8 @@ func (s *Service) List(ctx context.Context, f ListFilter) ([]models.Transaction,
 		SELECT t.id, t.external_id, t.casino_id, t.provider_id, t.requisite_id,
 		       t.amount, t.currency, t.country, t.status, t.player_id, t.is_sandbox,
 		       t.processing_ms, t.created_at, t.updated_at, t.assigned_at, t.paid_at,
-		       COALESCE(c.name, ''), COALESCE(p.name, ''), COALESCE(r.bank_name, '')
+		       COALESCE(c.name, ''), COALESCE(p.name, ''), COALESCE(r.bank_name, ''),
+		       t.provider_transaction_id
 		FROM transactions t
 		LEFT JOIN casinos c ON c.id = t.casino_id
 		LEFT JOIN providers p ON p.id = t.provider_id
@@ -456,6 +458,7 @@ func scanTransactionRow(row pgx.Row) (*models.Transaction, error) {
 		&tx.Amount, &tx.Currency, &tx.Country, &tx.Status, &tx.PlayerID, &tx.IsSandbox,
 		&tx.ProcessingMs, &tx.CreatedAt, &tx.UpdatedAt, &tx.AssignedAt, &tx.PaidAt,
 		&tx.CasinoName, &tx.ProviderName, &tx.RequisiteBank,
+		&tx.ProviderTransactionID,
 	)
 	if err != nil {
 		return nil, err
