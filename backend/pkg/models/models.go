@@ -77,6 +77,7 @@ type Provider struct {
 	MerchantID            *string      `json:"merchant_id,omitempty"`
 	BaseURL               *string      `json:"base_url,omitempty"`
 	WebhookURL            *string      `json:"webhook_url,omitempty"`
+	DisputeEndpoint       string       `json:"dispute_endpoint,omitempty"` // путь спора относительно base_url, напр. /dispute
 	IPWhitelist           []string     `json:"ip_whitelist,omitempty"`
 	Status                EntityStatus `json:"status"`
 	IsSandbox             bool         `json:"is_sandbox"`

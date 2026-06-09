@@ -149,15 +149,20 @@ func (s *Service) HasOpenDispute(ctx context.Context, transactionID uuid.UUID) (
 // идентификатор транзакции в формате провайдера, сумму в минорных единицах,
 // логирует тело ответа и ретраит при сетевых/5xx-ошибках.
 func (s *Service) notifyProviderAboutDispute(ctx context.Context, dispute *models.Dispute, providerID uuid.UUID) {
-	// Получаем адрес и учётные данные провайдера
-	var baseURL, apiKey, secretKey *string
+	// Получаем адрес, учётные данные и эндпоинт спора провайдера
+	var baseURL, apiKey, secretKey, disputeEndpoint *string
 	err := s.db.Pool.QueryRow(ctx, `
-		SELECT base_url, api_key, secret_key FROM providers WHERE id = $1
-	`, providerID).Scan(&baseURL, &apiKey, &secretKey)
+		SELECT base_url, api_key, secret_key, dispute_endpoint FROM providers WHERE id = $1
+	`, providerID).Scan(&baseURL, &apiKey, &secretKey, &disputeEndpoint)
 
 	if err != nil || baseURL == nil || *baseURL == "" {
 		fmt.Printf("[DISPUTE] Provider %s has no base_url configured (err=%v)\n", providerID, err)
 		return
+	}
+
+	endpoint := ""
+	if disputeEndpoint != nil {
+		endpoint = *disputeEndpoint
 	}
 
 	// Идентификатор транзакции, известный ПРОВАЙДЕРУ (provider_transaction_id),
@@ -174,8 +179,9 @@ func (s *Service) notifyProviderAboutDispute(ctx context.Context, dispute *model
 		fmt.Printf("[DISPUTE] WARN: transaction %s has no provider_transaction_id; provider may not match the dispute\n", dispute.TransactionID)
 	}
 
-	// Формируем URL для webhook провайдера
-	webhookURL := *baseURL + "/disputes"
+	// Формируем URL для webhook провайдера из настраиваемого dispute_endpoint.
+	// Раньше тут было жёстко "/disputes", что давало .../api/disputes -> 404.
+	webhookURL := buildProviderEndpointURL(*baseURL, endpoint)
 
 	// Формируем payload. Сумма — в минорных единицах (копейки/центы), как ждёт провайдер.
 	payload := map[string]interface{}{
@@ -256,6 +262,26 @@ func (s *Service) notifyProviderAboutDispute(ctx context.Context, dispute *model
 	}
 
 	fmt.Printf("[DISPUTE→PROVIDER] giving up after %d attempts for provider %s\n", maxAttempts, providerID)
+}
+
+// buildProviderEndpointURL собирает полный URL эндпоинта спора провайдера
+// из base_url и настраиваемого пути (dispute_endpoint).
+//
+//	base="https://api.majorpay.io/api", endpoint="/dispute"     -> https://api.majorpay.io/api/dispute
+//	base="https://api.majorpay.io/api", endpoint="/api/dispute" -> https://api.majorpay.io/api/dispute (схлопываем дубль /api)
+//	base="https://api.majorpay.io/api", endpoint=""             -> https://api.majorpay.io/api/dispute (дефолт)
+func buildProviderEndpointURL(baseURL, endpoint string) string {
+	if strings.TrimSpace(endpoint) == "" {
+		endpoint = "/dispute"
+	}
+	if !strings.HasPrefix(endpoint, "/") {
+		endpoint = "/" + endpoint
+	}
+	url := strings.TrimRight(baseURL, "/") + endpoint
+	// Защита от случайного дублирования сегмента /api/api/, если base_url уже
+	// заканчивается на /api, а в endpoint тоже указали /api.
+	url = strings.ReplaceAll(url, "/api/api/", "/api/")
+	return url
 }
 
 // mapReasonToProviderCode грубо классифицирует текстовую причину спора

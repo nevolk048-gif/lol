@@ -78,6 +78,31 @@ func TestBuildListDisputesQuery_AllFiltersAndPagination(t *testing.T) {
 	}
 }
 
+// Сборка URL эндпоинта спора провайдера из base_url и настраиваемого пути.
+func TestBuildProviderEndpointURL(t *testing.T) {
+	cases := []struct {
+		base, endpoint, want string
+	}{
+		// base уже содержит /api -> относительный /dispute
+		{"https://api.majorpay.io/api", "/dispute", "https://api.majorpay.io/api/dispute"},
+		// endpoint по ошибке тоже с /api -> дубль схлопывается
+		{"https://api.majorpay.io/api", "/api/dispute", "https://api.majorpay.io/api/dispute"},
+		// пустой endpoint -> дефолт /dispute
+		{"https://api.majorpay.io/api", "", "https://api.majorpay.io/api/dispute"},
+		// без ведущего слэша
+		{"https://api.majorpay.io/api", "dispute", "https://api.majorpay.io/api/dispute"},
+		// trailing slash в base
+		{"https://api.majorpay.io/api/", "/dispute", "https://api.majorpay.io/api/dispute"},
+		// другой провайдер без /api
+		{"https://psp.example.com", "/v1/dispute", "https://psp.example.com/v1/dispute"},
+	}
+	for _, c := range cases {
+		if got := buildProviderEndpointURL(c.base, c.endpoint); got != c.want {
+			t.Errorf("buildProviderEndpointURL(%q, %q) = %q, want %q", c.base, c.endpoint, got, c.want)
+		}
+	}
+}
+
 // Классификация причины спора в код категории чарджбэка для провайдера.
 func TestMapReasonToProviderCode(t *testing.T) {
 	cases := map[string]string{

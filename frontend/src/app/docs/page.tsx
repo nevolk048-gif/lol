@@ -747,10 +747,12 @@ function ProviderDisputes() {
     <Section id="p-disputes" title="Споры (disputes) — приём и обработка провайдером">
       <P>
         Когда по транзакции открывается спор, PaymentsGate отправляет провайдеру webhook на{" "}
-        <code>{`{base_url}`}/disputes</code>. Провайдер должен принять его, ответить{" "}
+        <code>{`{base_url}{dispute_endpoint}`}</code> (для MajorPay —{" "}
+        <code>https://api.majorpay.io/api/dispute</code>). Путь настраивается на провайдера
+        (колонка <code>dispute_endpoint</code>). Провайдер должен принять запрос, ответить{" "}
         <code>200 OK</code> и зарегистрировать спор у себя.
       </P>
-      <Endpoint method="POST" path="{base_url}/disputes" />
+      <Endpoint method="POST" path="{base_url}{dispute_endpoint}  →  /api/dispute" />
       <P>Формат данных, который получает провайдер:</P>
       <CodeBlock
         lang="json"
