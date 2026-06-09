@@ -32,6 +32,7 @@ import (
 	"github.com/paymentsgate/paymentsgate/pkg/database"
 	jwtpkg "github.com/paymentsgate/paymentsgate/pkg/jwt"
 	redispkg "github.com/paymentsgate/paymentsgate/pkg/redis"
+	"github.com/paymentsgate/paymentsgate/pkg/telegram"
 )
 
 // @title PaymentsGate API
@@ -102,7 +103,8 @@ func main() {
 	auditSvc := audit.NewService(db)
 	txSvc := transactions.NewService(db, router, hub)
 	sandboxSvc := sandbox.NewService(db, casinoSvc, providerSvc, requisiteSvc, ruleSvc, txSvc)
-	disputeSvc := disputes.NewService(db)
+	tgNotifier := telegram.NewNotifier(cfg.Telegram.BotToken, cfg.Telegram.DisputeChatID)
+	disputeSvc := disputes.NewService(db, tgNotifier)
 	trafficSvc := traffic.NewService(db)
 
 	authHandler := auth.NewHandler(authSvc)

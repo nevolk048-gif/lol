@@ -12,6 +12,12 @@ type Config struct {
 	Redis    RedisConfig
 	JWT      JWTConfig
 	Security SecurityConfig
+	Telegram TelegramConfig
+}
+
+type TelegramConfig struct {
+	BotToken      string
+	DisputeChatID string
 }
 
 type ServerConfig struct {
@@ -66,6 +72,10 @@ func Load() *Config {
 		Security: SecurityConfig{
 			EncryptionKey: getEnv("ENCRYPTION_KEY", "32-byte-dev-encryption-key!!"),
 			RateLimitRPS:  rateLimit,
+		},
+		Telegram: TelegramConfig{
+			BotToken:      getEnv("TELEGRAM_BOT_TOKEN", ""),
+			DisputeChatID: getEnv("TELEGRAM_DISPUTE_CHAT_ID", ""),
 		},
 	}
 }

@@ -14,14 +14,16 @@ import (
 	"github.com/paymentsgate/paymentsgate/pkg/crypto"
 	"github.com/paymentsgate/paymentsgate/pkg/database"
 	"github.com/paymentsgate/paymentsgate/pkg/models"
+	"github.com/paymentsgate/paymentsgate/pkg/telegram"
 )
 
 type Service struct {
-	db *database.DB
+	db  *database.DB
+	tg  *telegram.Notifier
 }
 
-func NewService(db *database.DB) *Service {
-	return &Service{db: db}
+func NewService(db *database.DB, tg *telegram.Notifier) *Service {
+	return &Service{db: db, tg: tg}
 }
 
 // CreateDispute создает новый спор и автоматически блокирует трафик провайдера
@@ -122,6 +124,17 @@ func (s *Service) CreateDispute(ctx context.Context, req CreateDisputeRequest) (
 	}
 
 	fmt.Printf("[DISPUTE] persisted id=%s and provider %s traffic disabled\n", dispute.ID, providerID)
+
+	// Отправляем уведомление в Telegram (асинхронно, не блокируем ответ)
+	go func() {
+		msg := fmt.Sprintf(
+			"<b>Новый спор по сделке:</b>\n<code>%s</code>\n\nСумма: <b>%.2f %s</b>\nПричина: %s",
+			dispute.TransactionID, dispute.Amount, dispute.Currency, dispute.Reason,
+		)
+		if err := s.tg.Send(context.Background(), msg); err != nil {
+			fmt.Printf("[TELEGRAM] failed to notify: %v\n", err)
+		}
+	}()
 
 	// Отправляем webhook провайдеру о создании спора (асинхронно)
 	go s.notifyProviderAboutDispute(context.Background(), dispute, providerID)
@@ -499,6 +512,17 @@ func (s *Service) AddMessage(ctx context.Context, req AddMessageRequest) (*model
 	err = s.addHistory(ctx, req.DisputeID, "MESSAGE_ADDED", &req.SenderID, map[string]interface{}{
 		"sender_type": req.SenderType,
 	})
+
+	// Уведомление в Telegram о новом сообщении/доказательстве (асинхронно)
+	go func() {
+		msg := fmt.Sprintf(
+			"<b>Новое сообщение в споре</b>\nСпор: <code>%s</code>\nОт: <b>%s</b>\n\n%s",
+			req.DisputeID, req.SenderType, req.Message,
+		)
+		if err := s.tg.Send(context.Background(), msg); err != nil {
+			fmt.Printf("[TELEGRAM] failed to notify on message: %v\n", err)
+		}
+	}()
 
 	return message, err
 }
