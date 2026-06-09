@@ -1,8 +1,9 @@
 -- Add MajorPay provider with sandbox configuration
 INSERT INTO providers (id, name, api_key, secret_key, merchant_id, base_url, webhook_url, status, is_sandbox) VALUES
-('b0000000-0000-0000-0000-000000000005', 'MajorPay', 'pk_9ec270e742bf8', 'sk_majorpay_secret_key_here', NULL, 'https://api.majorpay.com', 'https://api.majorpay.com/webhook', 'ACTIVE', true)
+('b0000000-0000-0000-0000-000000000005', 'MajorPay', 'pk_9ec270e742bf8', 'sk_majorpay_secret_key_here', NULL, 'https://api.majorpay.io/api', 'https://api.majorpay.io/api/webhook', 'ACTIVE', true)
 ON CONFLICT (id) DO UPDATE SET
     base_url = EXCLUDED.base_url,
+    webhook_url = EXCLUDED.webhook_url,
     api_key = EXCLUDED.api_key,
     status = EXCLUDED.status,
     updated_at = NOW();
