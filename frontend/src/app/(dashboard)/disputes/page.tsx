@@ -47,9 +47,15 @@ export default function DisputesPage() {
       const params = new URLSearchParams();
       if (statusFilter !== "all") params.append("status", statusFilter);
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/disputes?${params}`);
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/disputes?${params}`, {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
       if (!res.ok) throw new Error("Failed to fetch disputes");
-      return res.json();
+      const data = await res.json();
+      return data.success ? data.data : data;
     },
   });
 
@@ -58,9 +64,15 @@ export default function DisputesPage() {
     queryKey: ["dispute-messages", selectedDispute?.id],
     queryFn: async () => {
       if (!selectedDispute) return [];
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/disputes/${selectedDispute.id}/messages`);
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/disputes/${selectedDispute.id}/messages`, {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
       if (!res.ok) throw new Error("Failed to fetch messages");
-      return res.json();
+      const data = await res.json();
+      return data.success ? data.data : data;
     },
     enabled: !!selectedDispute,
   });
@@ -68,9 +80,13 @@ export default function DisputesPage() {
   // Update status mutation
   const updateStatusMutation = useMutation({
     mutationFn: async ({ disputeId, status }: { disputeId: string; status: string }) => {
+      const token = localStorage.getItem("access_token");
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/disputes/${disputeId}/status`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
         body: JSON.stringify({ status }),
       });
       if (!res.ok) throw new Error("Failed to update status");
@@ -86,9 +102,13 @@ export default function DisputesPage() {
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: async ({ disputeId, message }: { disputeId: string; message: string }) => {
+      const token = localStorage.getItem("access_token");
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/disputes/${disputeId}/messages`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
         body: JSON.stringify({ message }),
       });
       if (!res.ok) throw new Error("Failed to send message");

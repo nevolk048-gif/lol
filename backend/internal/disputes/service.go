@@ -1,8 +1,11 @@
 package disputes
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/google/uuid"
@@ -112,7 +115,67 @@ func (s *Service) CreateDispute(ctx context.Context, req CreateDisputeRequest) (
 		return nil, fmt.Errorf("commit transaction: %w", err)
 	}
 
+	// Отправляем webhook провайдеру о создании спора (асинхронно)
+	go s.notifyProviderAboutDispute(context.Background(), dispute, providerID)
+
 	return dispute, nil
+}
+
+// notifyProviderAboutDispute отправляет webhook провайдеру о создании спора
+func (s *Service) notifyProviderAboutDispute(ctx context.Context, dispute *models.Dispute, providerID uuid.UUID) {
+	// Получаем webhook URL провайдера
+	var webhookURL *string
+	err := s.db.Pool.QueryRow(ctx, `
+		SELECT webhook_url FROM providers WHERE id = $1
+	`, providerID).Scan(&webhookURL)
+
+	if err != nil || webhookURL == nil || *webhookURL == "" {
+		fmt.Printf("[DISPUTE] Provider %s has no webhook URL configured\n", providerID)
+		return
+	}
+
+	// Формируем payload
+	payload := map[string]interface{}{
+		"type": "dispute.created",
+		"object": map[string]interface{}{
+			"dispute_id":     dispute.ID.String(),
+			"transaction_id": dispute.TransactionID.String(),
+			"status":         dispute.Status,
+			"reason":         dispute.Reason,
+			"amount":         dispute.Amount,
+			"currency":       dispute.Currency,
+			"created_at":     dispute.CreatedAt.Format(time.RFC3339),
+		},
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		fmt.Printf("[ERROR] Failed to marshal dispute webhook payload: %v\n", err)
+		return
+	}
+
+	// Отправляем webhook
+	req, err := http.NewRequestWithContext(ctx, "POST", *webhookURL, bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		fmt.Printf("[ERROR] Failed to create dispute webhook request: %v\n", err)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("[ERROR] Failed to send dispute webhook to provider: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		fmt.Printf("[WARN] Provider dispute webhook returned status %d\n", resp.StatusCode)
+	} else {
+		fmt.Printf("[SUCCESS] Dispute webhook sent to provider %s\n", providerID)
+	}
 }
 
 // GetDispute получает спор по ID
