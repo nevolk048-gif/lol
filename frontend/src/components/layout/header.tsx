@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Bell, Sun, Moon, LogOut, Command } from "lucide-react";
+import Link from "next/link";
+import { Search, Bell, Sun, Moon, LogOut, Command, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/stores/auth-store";
@@ -53,6 +54,13 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Link
+            href="/docs"
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <BookOpen className="h-4 w-4" />
+            Документация
+          </Link>
           <LanguageSwitcher />
           <Button variant="ghost" size="icon" onClick={toggleTheme}>
             {resolvedTheme === "dark" ? (

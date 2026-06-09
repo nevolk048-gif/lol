@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { motion } from "framer-motion";
-import { Zap, Eye, EyeOff } from "lucide-react";
+import { Zap, Eye, EyeOff, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -120,6 +121,15 @@ export default function LoginPage() {
                   {loading ? t("signingIn") : t("signIn")}
                 </Button>
               </form>
+              <div className="mt-6 border-t border-border/50 pt-4 text-center">
+                <Link
+                  href="/docs"
+                  className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+                >
+                  <BookOpen className="h-4 w-4" />
+                  Документация для разработчиков
+                </Link>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
