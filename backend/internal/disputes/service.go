@@ -28,16 +28,17 @@ func NewService(db *database.DB, tg *telegram.Notifier) *Service {
 
 // CreateDispute создает новый спор и автоматически блокирует трафик провайдера
 func (s *Service) CreateDispute(ctx context.Context, req CreateDisputeRequest) (*models.Dispute, error) {
-	// Получаем информацию о транзакции
+	// Получаем информацию о транзакции, включая ID транзакции на стороне провайдера
 	var transactionID, providerID, casinoID uuid.UUID
 	var amount float64
 	var currency string
+	var providerTxID *string
 
 	err := s.db.Pool.QueryRow(ctx, `
-		SELECT id, provider_id, casino_id, amount, currency
+		SELECT id, provider_id, casino_id, amount, currency, provider_transaction_id
 		FROM transactions
 		WHERE id = $1
-	`, req.TransactionID).Scan(&transactionID, &providerID, &casinoID, &amount, &currency)
+	`, req.TransactionID).Scan(&transactionID, &providerID, &casinoID, &amount, &currency, &providerTxID)
 
 	if err != nil {
 		return nil, fmt.Errorf("get transaction: %w", err)
@@ -137,7 +138,8 @@ func (s *Service) CreateDispute(ctx context.Context, req CreateDisputeRequest) (
 	}()
 
 	// Отправляем webhook провайдеру о создании спора (асинхронно)
-	go s.notifyProviderAboutDispute(context.Background(), dispute, providerID)
+	// providerTxID уже получен из первого SELECT — не делаем второй запрос
+	go s.notifyProviderAboutDispute(context.Background(), dispute, providerID, providerTxID)
 
 	return dispute, nil
 }
@@ -158,10 +160,17 @@ func (s *Service) HasOpenDispute(ctx context.Context, transactionID uuid.UUID) (
 }
 
 // notifyProviderAboutDispute отправляет webhook провайдеру о создании спора.
-// Передаёт учётные данные провайдера (merchant-id/secret + HMAC-подпись),
-// идентификатор транзакции в формате провайдера, сумму в минорных единицах,
-// логирует тело ответа и ретраит при сетевых/5xx-ошибках.
-func (s *Service) notifyProviderAboutDispute(ctx context.Context, dispute *models.Dispute, providerID uuid.UUID) {
+// providerTxID — идентификатор транзакции в формате провайдера (pay_...).
+// Если он пустой, уведомление пропускается: UUID бессмысленен для провайдера.
+func (s *Service) notifyProviderAboutDispute(ctx context.Context, dispute *models.Dispute, providerID uuid.UUID, providerTxID *string) {
+	// Без provider_transaction_id провайдер не найдёт сделку — не отправляем
+	if providerTxID == nil || *providerTxID == "" {
+		fmt.Printf("[DISPUTE] WARN: transaction %s has no provider_transaction_id — skipping provider notification\n",
+			dispute.TransactionID)
+		return
+	}
+	txRef := *providerTxID
+
 	// Получаем адрес, учётные данные и эндпоинт спора провайдера
 	var baseURL, apiKey, secretKey, disputeEndpoint *string
 	err := s.db.Pool.QueryRow(ctx, `
@@ -176,20 +185,6 @@ func (s *Service) notifyProviderAboutDispute(ctx context.Context, dispute *model
 	endpoint := ""
 	if disputeEndpoint != nil {
 		endpoint = *disputeEndpoint
-	}
-
-	// Идентификатор транзакции, известный ПРОВАЙДЕРУ (provider_transaction_id),
-	// а не внутренний UUID PaymentsGate — иначе провайдер не сматчит спор.
-	var providerTxID *string
-	_ = s.db.Pool.QueryRow(ctx, `
-		SELECT provider_transaction_id FROM transactions WHERE id = $1
-	`, dispute.TransactionID).Scan(&providerTxID)
-
-	txRef := dispute.TransactionID.String()
-	if providerTxID != nil && *providerTxID != "" {
-		txRef = *providerTxID
-	} else {
-		fmt.Printf("[DISPUTE] WARN: transaction %s has no provider_transaction_id; provider may not match the dispute\n", dispute.TransactionID)
 	}
 
 	// Формируем URL для webhook провайдера из настраиваемого dispute_endpoint.
