@@ -235,21 +235,19 @@ func (h *DisputeHandler) GetDisputeStats(c *gin.Context) {
 func (h *DisputeHandler) RegisterRoutes(rg *gin.RouterGroup, authMiddleware gin.HandlerFunc, casinoAuth gin.HandlerFunc) {
 	disputes := rg.Group("/disputes")
 
-	// Споры доступны как админам (JWT), так и казино (API ключ)
+	// Создание спора доступно казино (API ключ)
 	disputes.POST("", h.CreateDispute)
-	disputes.GET("", h.ListDisputes)
-	disputes.GET("/:id", h.GetDispute)
 
-	// Обновление статуса только для админов
-	adminDisputes := disputes.Group("")
-	adminDisputes.Use(authMiddleware)
+	// Просмотр споров требует авторизации (JWT для админов)
+	authDisputes := disputes.Group("")
+	authDisputes.Use(authMiddleware)
 	{
-		adminDisputes.PUT("/:id/status", h.UpdateDisputeStatus)
-		adminDisputes.GET("/stats", h.GetDisputeStats)
+		authDisputes.GET("", h.ListDisputes)
+		authDisputes.GET("/:id", h.GetDispute)
+		authDisputes.PUT("/:id/status", h.UpdateDisputeStatus)
+		authDisputes.GET("/stats", h.GetDisputeStats)
+		authDisputes.POST("/:id/messages", h.AddDisputeMessage)
+		authDisputes.GET("/:id/messages", h.GetDisputeMessages)
+		authDisputes.GET("/:id/history", h.GetDisputeHistory)
 	}
-
-	// Сообщения доступны всем авторизованным
-	disputes.POST("/:id/messages", h.AddDisputeMessage)
-	disputes.GET("/:id/messages", h.GetDisputeMessages)
-	disputes.GET("/:id/history", h.GetDisputeHistory)
 }

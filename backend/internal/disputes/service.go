@@ -123,16 +123,19 @@ func (s *Service) CreateDispute(ctx context.Context, req CreateDisputeRequest) (
 
 // notifyProviderAboutDispute отправляет webhook провайдеру о создании спора
 func (s *Service) notifyProviderAboutDispute(ctx context.Context, dispute *models.Dispute, providerID uuid.UUID) {
-	// Получаем webhook URL провайдера
-	var webhookURL *string
+	// Получаем base_url провайдера (не webhook_url)
+	var baseURL *string
 	err := s.db.Pool.QueryRow(ctx, `
-		SELECT webhook_url FROM providers WHERE id = $1
-	`, providerID).Scan(&webhookURL)
+		SELECT base_url FROM providers WHERE id = $1
+	`, providerID).Scan(&baseURL)
 
-	if err != nil || webhookURL == nil || *webhookURL == "" {
-		fmt.Printf("[DISPUTE] Provider %s has no webhook URL configured\n", providerID)
+	if err != nil || baseURL == nil || *baseURL == "" {
+		fmt.Printf("[DISPUTE] Provider %s has no base_url configured\n", providerID)
 		return
 	}
+
+	// Формируем URL для webhook провайдера
+	webhookURL := *baseURL + "/disputes"
 
 	// Формируем payload
 	payload := map[string]interface{}{
@@ -155,7 +158,7 @@ func (s *Service) notifyProviderAboutDispute(ctx context.Context, dispute *model
 	}
 
 	// Отправляем webhook
-	req, err := http.NewRequestWithContext(ctx, "POST", *webhookURL, bytes.NewBuffer(payloadBytes))
+	req, err := http.NewRequestWithContext(ctx, "POST", webhookURL, bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		fmt.Printf("[ERROR] Failed to create dispute webhook request: %v\n", err)
 		return
@@ -166,7 +169,7 @@ func (s *Service) notifyProviderAboutDispute(ctx context.Context, dispute *model
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("[ERROR] Failed to send dispute webhook to provider: %v\n", err)
+		fmt.Printf("[WARN] Failed to send dispute webhook to provider %s: %v\n", providerID, err)
 		return
 	}
 	defer resp.Body.Close()
@@ -174,7 +177,7 @@ func (s *Service) notifyProviderAboutDispute(ctx context.Context, dispute *model
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		fmt.Printf("[WARN] Provider dispute webhook returned status %d\n", resp.StatusCode)
 	} else {
-		fmt.Printf("[SUCCESS] Dispute webhook sent to provider %s\n", providerID)
+		fmt.Printf("[SUCCESS] Dispute webhook sent to provider %s at %s\n", providerID, webhookURL)
 	}
 }
 
