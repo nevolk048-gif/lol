@@ -45,19 +45,16 @@ export default function LoginPage() {
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-primary/20 via-background to-background">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-primary/30 via-transparent to-transparent" />
         <div className="relative z-10 flex flex-col justify-center p-12">
-          <div className="flex items-center gap-3 mb-8">
+          <div className="flex items-center gap-3 mb-10">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
               <Zap className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">PaymentsGate</h1>
+              <h1 className="text-2xl font-bold">GorillaGate</h1>
               <p className="text-muted-foreground">{t("enterpriseAggregator")}</p>
             </div>
           </div>
-          <h2 className="text-4xl font-bold leading-tight mb-4">
-            {t("routeCasinoDeposits")}
-          </h2>
-          <p className="text-lg text-muted-foreground max-w-md">
+          <p className="text-xl text-muted-foreground max-w-md leading-relaxed">
             {t("automaticRouting")}
           </p>
           <div className="mt-12 grid grid-cols-3 gap-6">
@@ -83,6 +80,11 @@ export default function LoginPage() {
         >
           <Card className="border-border/50 shadow-xl">
             <CardHeader className="text-center">
+              <div className="flex justify-center mb-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
+                  <Zap className="h-5 w-5 text-primary-foreground" />
+                </div>
+              </div>
               <CardTitle className="text-2xl">{t("signIn")}</CardTitle>
               <CardDescription>{t("enterCredentials")}</CardDescription>
             </CardHeader>

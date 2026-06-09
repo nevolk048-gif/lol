@@ -66,7 +66,7 @@ export default function DocsPage() {
       <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/80 px-6 backdrop-blur-xl">
         <Link href="/docs" className="flex items-center gap-2 font-semibold">
           <BookOpen className="h-5 w-5 text-primary" />
-          PaymentsGate Docs
+          GorillaGate Docs
         </Link>
         <nav className="flex items-center gap-4 text-sm">
           <Link href="/disputes" className="text-muted-foreground hover:text-foreground">
@@ -192,10 +192,10 @@ function Intro() {
     <div className="rounded-xl border border-border bg-muted/30 p-6">
       <div className="mb-2 flex items-center gap-2">
         <BookOpen className="h-6 w-6 text-primary" />
-        <h1 className="text-3xl font-bold">Документация PaymentsGate</h1>
+        <h1 className="text-3xl font-bold">Документация GorillaGate</h1>
       </div>
       <P>
-        <strong>PaymentsGate</strong> — корпоративный агрегатор платежей для маршрутизации
+        <strong>GorillaGate</strong> — корпоративный агрегатор платежей для маршрутизации
         депозитов казино между 50+ провайдерами. Ниже — техническая документация для двух
         аудиторий: <strong>мерчантов</strong> (казино/гемблинг-операторы) и{" "}
         <strong>провайдеров</strong> (платёжные системы, включая MajorPay).
@@ -237,7 +237,7 @@ function MerchantQuickstart() {
         Чтобы начать принимать депозиты, мерчанту нужен <strong>API-ключ казино</strong>.
       </P>
       <ol className="ml-5 list-decimal space-y-2">
-        <li>Зарегистрируйте казино в админ-панели PaymentsGate (или запросите у менеджера).</li>
+        <li>Зарегистрируйте казино в админ-панели GorillaGate (или запросите у менеджера).</li>
         <li>
           Получите <code>api_key</code> вида <code>pk_xxx</code>. Он передаётся в каждом запросе
           в заголовке <code>X-API-Key</code>.
@@ -415,7 +415,7 @@ function MerchantStatuses() {
 Выплаты: PAYOUT_SUCCESS / PAYOUT_ERROR`}
       />
       <P>
-        PaymentsGate уведомляет мерчанта об изменении статуса POST-запросом на ваш{" "}
+        GorillaGate уведомляет мерчанта об изменении статуса POST-запросом на ваш{" "}
         <code>webhook_url</code>. Тело колбэка:
       </P>
       <CodeBlock
@@ -445,11 +445,11 @@ function MerchantStatuses() {
 import crypto from "crypto";
 
 const app = express();
-app.use("/webhooks/paymentsgate", express.raw({ type: "application/json" }));
+app.use("/webhooks/gorillagate", express.raw({ type: "application/json" }));
 
 const SECRET = process.env.PG_WEBHOOK_SECRET;
 
-app.post("/webhooks/paymentsgate", (req, res) => {
+app.post("/webhooks/gorillagate", (req, res) => {
   const raw = req.body; // Buffer
   const signature = req.get("X-Signature") || "";
 
@@ -574,12 +574,12 @@ function ProviderRegister() {
     <Section id="p-register" title="Регистрация провайдера в системе">
       <P>
         Провайдер (PSP/банк, например <strong>MajorPay</strong>) подключается администратором
-        PaymentsGate. При регистрации провайдер получает пару ключей:
+        GorillaGate. При регистрации провайдер получает пару ключей:
       </P>
       <ul className="ml-5 list-disc space-y-1">
         <li><code>api_key</code> (<code>pk_...</code>) — публичный идентификатор.</li>
         <li><code>secret_key</code> (<code>sk_...</code>) — для HMAC-подписи запросов.</li>
-        <li><code>base_url</code> — адрес API провайдера, куда PaymentsGate шлёт запросы.</li>
+        <li><code>base_url</code> — адрес API провайдера, куда GorillaGate шлёт запросы.</li>
         <li>(Опц.) <strong>IP whitelist</strong> — список разрешённых адресов.</li>
       </ul>
       <P>Защищённые провайдерские запросы аутентифицируются заголовками:</P>
@@ -606,7 +606,7 @@ function ProviderIncoming() {
   return (
     <Section id="p-incoming" title="Формат входящих запросов на создание платежа">
       <P>
-        Когда PaymentsGate маршрутизирует депозит на провайдера, он отправляет POST на{" "}
+        Когда GorillaGate маршрутизирует депозит на провайдера, он отправляет POST на{" "}
         <code>{`{base_url}`}/deposit</code> (или согласованный эндпоинт) с заголовками{" "}
         <code>merchant-id</code> и <code>merchant-secret-key</code>. Тело:
       </P>
@@ -634,7 +634,7 @@ function ProviderResponse() {
     <Section id="p-response" title="Требования к ответу провайдера (JSON, HTTP-статусы)">
       <P>
         Провайдер должен ответить JSON с реквизитами для оплаты и идентификатором своей
-        транзакции (он станет <code>provider_transaction_id</code> в PaymentsGate):
+        транзакции (он станет <code>provider_transaction_id</code> в GorillaGate):
       </P>
       <CodeBlock
         lang="json"
@@ -688,7 +688,7 @@ function ProviderResponse() {
 function ProviderWebhook() {
   return (
     <Section id="p-webhook" title="Webhook для уведомлений об изменении статуса">
-      <P>Провайдер уведомляет PaymentsGate об изменении статуса транзакции:</P>
+      <P>Провайдер уведомляет GorillaGate об изменении статуса транзакции:</P>
       <Endpoint method="POST" path="/api/v1/webhook/majorpay" />
       <P>Заголовки:</P>
       <CodeBlock
@@ -715,7 +715,7 @@ X-Major-Signature: <hex( HMAC_SHA256(secret_key, raw_body) )>`}
       />
       <P>
         Поле <code>object.uuid</code> — это <code>provider_transaction_id</code>, по которому
-        PaymentsGate находит транзакцию. Поддерживаемые <code>type</code>:
+        GorillaGate находит транзакцию. Поддерживаемые <code>type</code>:
       </P>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
@@ -734,7 +734,7 @@ X-Major-Signature: <hex( HMAC_SHA256(secret_key, raw_body) )>`}
         </table>
       </div>
       <P>
-        PaymentsGate всегда возвращает <code>200 OK</code> (<code>{`{"status":"ok"}`}</code>), даже
+        GorillaGate всегда возвращает <code>200 OK</code> (<code>{`{"status":"ok"}`}</code>), даже
         если транзакция не найдена — чтобы не провоцировать бесконечные ретраи. Повторяйте отправку
         только при сетевых ошибках/таймауте.
       </P>
@@ -746,7 +746,7 @@ function ProviderDisputes() {
   return (
     <Section id="p-disputes" title="Споры (disputes) — приём и обработка провайдером">
       <P>
-        Когда по транзакции открывается спор, PaymentsGate отправляет провайдеру webhook на{" "}
+        Когда по транзакции открывается спор, GorillaGate отправляет провайдеру webhook на{" "}
         <code>{`{base_url}{dispute_endpoint}`}</code> (для MajorPay —{" "}
         <code>https://api.majorpay.io/api/dispute</code>). Путь настраивается на провайдера
         (колонка <code>dispute_endpoint</code>). Провайдер должен принять запрос, ответить{" "}
@@ -772,14 +772,14 @@ function ProviderDisputes() {
       />
       <P>
         Также провайдер может <strong>инициировать</strong> спор со своей стороны, отправив
-        dispute-событие на webhook-эндпоинт PaymentsGate (
+        dispute-событие на webhook-эндпоинт GorillaGate (
         <code>POST /api/v1/webhook/majorpay</code>) с одним из типов:{" "}
         <code>dispute.created</code>, <code>chargeback</code>, <code>chargeback.created</code>,{" "}
         <code>payment.chargeback</code>, <code>payment.dispute</code>:
       </P>
       <CodeBlock
         lang="json"
-        label="provider → PaymentsGate (инициировать спор)"
+        label="provider → GorillaGate (инициировать спор)"
         code={`{
   "type": "dispute.created",
   "object": {
@@ -790,7 +790,7 @@ function ProviderDisputes() {
   "secret_key": "sk_..."
 }`}
       />
-      <P>PaymentsGate при получении dispute-события:</P>
+      <P>GorillaGate при получении dispute-события:</P>
       <ol className="ml-5 list-decimal space-y-1">
         <li>находит транзакцию по <code>object.uuid</code> (<code>provider_transaction_id</code>);</li>
         <li>проверяет, нет ли уже открытого спора (дедупликация);</li>
@@ -806,7 +806,7 @@ function Footer() {
   return (
     <footer className="mt-16 border-t border-border pt-6 text-sm text-muted-foreground">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <p>© PaymentsGate — Enterprise Payment Aggregator. Все эндпоинты работают по HTTPS.</p>
+        <p>© GorillaGate — Enterprise Payment Aggregator. Все эндпоинты работают по HTTPS.</p>
         <a
           href="#"
           className="inline-flex items-center gap-1 text-primary hover:underline"

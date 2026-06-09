@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "PaymentsGate — Enterprise Payment Aggregator",
+  title: "GorillaGate — Enterprise Payment Aggregator",
   description: "Modern SaaS payment routing platform for casino deposits",
 };
 

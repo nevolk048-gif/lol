@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "PaymentsGate — Документация для разработчиков",
+  title: "GorillaGate — Документация для разработчиков",
   description:
-    "Техническая документация PaymentsGate: интеграция для мерчантов (казино/гемблинг) и платёжных провайдеров. Создание депозитов, webhook-уведомления, обработка споров (disputes), коды ошибок.",
+    "Техническая документация GorillaGate: интеграция для мерчантов (казино/гемблинг) и платёжных провайдеров. Создание депозитов, webhook-уведомления, обработка споров (disputes), коды ошибок.",
   keywords: [
-    "PaymentsGate",
+    "GorillaGate",
     "payment aggregator",
     "API documentation",
     "merchant integration",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   ],
   robots: { index: true, follow: true },
   openGraph: {
-    title: "PaymentsGate — Документация для разработчиков",
+    title: "GorillaGate — Документация для разработчиков",
     description:
       "Интеграция для мерчантов и провайдеров: депозиты, webhooks, споры, коды ошибок.",
     type: "website",

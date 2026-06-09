@@ -56,7 +56,7 @@ export function Sidebar() {
         </div>
         {!collapsed && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <p className="text-sm font-bold tracking-tight">PaymentsGate</p>
+            <p className="text-sm font-bold tracking-tight">GorillaGate</p>
             <p className="text-[10px] text-muted-foreground">{t("enterpriseAggregator")}</p>
           </motion.div>
         )}
