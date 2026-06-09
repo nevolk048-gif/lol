@@ -5,10 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/paymentsgate/paymentsgate/pkg/crypto"
 	"github.com/paymentsgate/paymentsgate/pkg/database"
 	"github.com/paymentsgate/paymentsgate/pkg/models"
 )
@@ -141,31 +144,49 @@ func (s *Service) HasOpenDispute(ctx context.Context, transactionID uuid.UUID) (
 	return count > 0, nil
 }
 
-// notifyProviderAboutDispute отправляет webhook провайдеру о создании спора
+// notifyProviderAboutDispute отправляет webhook провайдеру о создании спора.
+// Передаёт учётные данные провайдера (merchant-id/secret + HMAC-подпись),
+// идентификатор транзакции в формате провайдера, сумму в минорных единицах,
+// логирует тело ответа и ретраит при сетевых/5xx-ошибках.
 func (s *Service) notifyProviderAboutDispute(ctx context.Context, dispute *models.Dispute, providerID uuid.UUID) {
-	// Получаем base_url провайдера (не webhook_url)
-	var baseURL *string
+	// Получаем адрес и учётные данные провайдера
+	var baseURL, apiKey, secretKey *string
 	err := s.db.Pool.QueryRow(ctx, `
-		SELECT base_url FROM providers WHERE id = $1
-	`, providerID).Scan(&baseURL)
+		SELECT base_url, api_key, secret_key FROM providers WHERE id = $1
+	`, providerID).Scan(&baseURL, &apiKey, &secretKey)
 
 	if err != nil || baseURL == nil || *baseURL == "" {
-		fmt.Printf("[DISPUTE] Provider %s has no base_url configured\n", providerID)
+		fmt.Printf("[DISPUTE] Provider %s has no base_url configured (err=%v)\n", providerID, err)
 		return
+	}
+
+	// Идентификатор транзакции, известный ПРОВАЙДЕРУ (provider_transaction_id),
+	// а не внутренний UUID PaymentsGate — иначе провайдер не сматчит спор.
+	var providerTxID *string
+	_ = s.db.Pool.QueryRow(ctx, `
+		SELECT provider_transaction_id FROM transactions WHERE id = $1
+	`, dispute.TransactionID).Scan(&providerTxID)
+
+	txRef := dispute.TransactionID.String()
+	if providerTxID != nil && *providerTxID != "" {
+		txRef = *providerTxID
+	} else {
+		fmt.Printf("[DISPUTE] WARN: transaction %s has no provider_transaction_id; provider may not match the dispute\n", dispute.TransactionID)
 	}
 
 	// Формируем URL для webhook провайдера
 	webhookURL := *baseURL + "/disputes"
 
-	// Формируем payload
+	// Формируем payload. Сумма — в минорных единицах (копейки/центы), как ждёт провайдер.
 	payload := map[string]interface{}{
 		"type": "dispute.created",
 		"object": map[string]interface{}{
 			"dispute_id":     dispute.ID.String(),
-			"transaction_id": dispute.TransactionID.String(),
+			"transaction_id": txRef,
 			"status":         dispute.Status,
 			"reason":         dispute.Reason,
-			"amount":         dispute.Amount,
+			"reason_code":    mapReasonToProviderCode(dispute.Reason),
+			"amount":         int64(dispute.Amount*100 + 0.5), // мажорные → минорные единицы
 			"currency":       dispute.Currency,
 			"created_at":     dispute.CreatedAt.Format(time.RFC3339),
 		},
@@ -177,27 +198,81 @@ func (s *Service) notifyProviderAboutDispute(ctx context.Context, dispute *model
 		return
 	}
 
-	// Отправляем webhook
-	req, err := http.NewRequestWithContext(ctx, "POST", webhookURL, bytes.NewBuffer(payloadBytes))
-	if err != nil {
-		fmt.Printf("[ERROR] Failed to create dispute webhook request: %v\n", err)
-		return
+	// HMAC-подпись сырого тела секретным ключом провайдера
+	signature := ""
+	if secretKey != nil {
+		signature = crypto.HMACSign(string(payloadBytes), *secretKey)
 	}
-
-	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Printf("[WARN] Failed to send dispute webhook to provider %s: %v\n", providerID, err)
-		return
-	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		fmt.Printf("[WARN] Provider dispute webhook returned status %d\n", resp.StatusCode)
-	} else {
-		fmt.Printf("[SUCCESS] Dispute webhook sent to provider %s at %s\n", providerID, webhookURL)
+	const maxAttempts = 4
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		req, reqErr := http.NewRequestWithContext(ctx, "POST", webhookURL, bytes.NewReader(payloadBytes))
+		if reqErr != nil {
+			fmt.Printf("[ERROR] Failed to create dispute webhook request: %v\n", reqErr)
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if apiKey != nil {
+			req.Header.Set("merchant-id", *apiKey)
+		}
+		if secretKey != nil {
+			req.Header.Set("merchant-secret-key", *secretKey)
+		}
+		if signature != "" {
+			req.Header.Set("X-Signature", signature)
+		}
+		// Идемпотентность: повтор с тем же ключом не создаст дубль на стороне провайдера
+		req.Header.Set("Idempotency-Key", dispute.ID.String())
+
+		resp, doErr := client.Do(req)
+		if doErr != nil {
+			fmt.Printf("[DISPUTE→PROVIDER] attempt %d/%d network error to provider %s: %v\n",
+				attempt, maxAttempts, providerID, doErr)
+		} else {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+
+			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+				fmt.Printf("[SUCCESS] Dispute %s sent to provider %s at %s (status=%d)\n",
+					dispute.ID, providerID, webhookURL, resp.StatusCode)
+				return
+			}
+
+			fmt.Printf("[DISPUTE→PROVIDER] attempt %d/%d status=%d url=%s body=%s\n",
+				attempt, maxAttempts, resp.StatusCode, webhookURL, string(body))
+
+			// Клиентская ошибка (кроме 409 Conflict) — ретрай не поможет
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != http.StatusConflict {
+				fmt.Printf("[DISPUTE→PROVIDER] client error %d — not retrying\n", resp.StatusCode)
+				return
+			}
+		}
+
+		if attempt < maxAttempts {
+			time.Sleep(time.Duration(1<<attempt) * time.Second) // 2s, 4s, 8s
+		}
+	}
+
+	fmt.Printf("[DISPUTE→PROVIDER] giving up after %d attempts for provider %s\n", maxAttempts, providerID)
+}
+
+// mapReasonToProviderCode грубо классифицирует текстовую причину спора
+// в код категории чарджбэка, который ожидают провайдеры.
+func mapReasonToProviderCode(reason string) string {
+	r := strings.ToLower(reason)
+	switch {
+	case strings.Contains(r, "fraud") || strings.Contains(r, "мошен"):
+		return "fraud"
+	case strings.Contains(r, "not received") || strings.Contains(r, "не получ"):
+		return "product_not_received"
+	case strings.Contains(r, "duplicate") || strings.Contains(r, "дубл"):
+		return "duplicate"
+	case strings.Contains(r, "amount") || strings.Contains(r, "сумм"):
+		return "amount_mismatch"
+	default:
+		return "general"
 	}
 }
 

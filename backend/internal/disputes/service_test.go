@@ -78,6 +78,27 @@ func TestBuildListDisputesQuery_AllFiltersAndPagination(t *testing.T) {
 	}
 }
 
+// Классификация причины спора в код категории чарджбэка для провайдера.
+func TestMapReasonToProviderCode(t *testing.T) {
+	cases := map[string]string{
+		"Подозрение на fraud":             "fraud",
+		"Мошенническая операция":          "fraud",
+		"Товар не получен клиентом":        "product_not_received",
+		"product not received":            "product_not_received",
+		"Duplicate charge":                "duplicate",
+		"Дубликат платежа":                "duplicate",
+		"Неверная сумма":                  "amount_mismatch",
+		"amount mismatch":                 "amount_mismatch",
+		"Что-то совсем другое":            "general",
+		"":                                "general",
+	}
+	for reason, want := range cases {
+		if got := mapReasonToProviderCode(reason); got != want {
+			t.Errorf("mapReasonToProviderCode(%q) = %q, want %q", reason, got, want)
+		}
+	}
+}
+
 // Обновление спора: терминальные статусы фиксируют разрешение, рабочие — нет.
 func TestIsResolvedStatus(t *testing.T) {
 	cases := map[models.DisputeStatus]bool{
