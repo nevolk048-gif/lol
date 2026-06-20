@@ -47,7 +47,7 @@ func (s *Service) List(ctx context.Context, providerID *uuid.UUID) ([]models.Req
 	}
 	defer rows.Close()
 
-	var list []models.Requisite
+	list := make([]models.Requisite, 0)
 	for rows.Next() {
 		var r models.Requisite
 		if err := rows.Scan(

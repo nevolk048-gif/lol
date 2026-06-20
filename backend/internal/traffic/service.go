@@ -165,7 +165,8 @@ func (s *Service) GetTrafficHistory(ctx context.Context, providerID uuid.UUID, l
 	}
 	defer rows.Close()
 
-	var history []models.ProviderTrafficHistory
+	// Инициализируем пустой срез, а не nil, чтобы JSON вернул [] вместо null
+	history := make([]models.ProviderTrafficHistory, 0)
 	for rows.Next() {
 		var h models.ProviderTrafficHistory
 		err := rows.Scan(&h.ID, &h.ProviderID, &h.Action, &h.Reason, &h.PerformedBy, &h.CreatedAt)

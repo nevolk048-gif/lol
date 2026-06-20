@@ -482,7 +482,7 @@ func (s *Service) List(ctx context.Context, f ListFilter) ([]models.Transaction,
 	}
 	defer rows.Close()
 
-	var txs []models.Transaction
+	txs := make([]models.Transaction, 0)
 	for rows.Next() {
 		tx, err := scanTransactionRow(rows)
 		if err != nil {

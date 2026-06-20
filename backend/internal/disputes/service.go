@@ -549,7 +549,7 @@ func (s *Service) GetMessages(ctx context.Context, disputeID uuid.UUID) ([]model
 	}
 	defer rows.Close()
 
-	var messages []models.DisputeMessage
+	messages := make([]models.DisputeMessage, 0)
 	for rows.Next() {
 		var m models.DisputeMessage
 		err := rows.Scan(
@@ -579,7 +579,7 @@ func (s *Service) GetHistory(ctx context.Context, disputeID uuid.UUID) ([]models
 	}
 	defer rows.Close()
 
-	var history []models.DisputeHistory
+	history := make([]models.DisputeHistory, 0)
 	for rows.Next() {
 		var h models.DisputeHistory
 		err := rows.Scan(

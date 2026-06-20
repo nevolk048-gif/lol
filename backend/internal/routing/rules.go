@@ -43,7 +43,7 @@ func (s *Service) List(ctx context.Context) ([]models.RouteRule, error) {
 	}
 	defer rows.Close()
 
-	var list []models.RouteRule
+	list := make([]models.RouteRule, 0)
 	for rows.Next() {
 		var r models.RouteRule
 		if err := rows.Scan(

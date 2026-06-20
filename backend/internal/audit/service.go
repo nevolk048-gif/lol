@@ -66,7 +66,7 @@ func (s *Service) List(ctx context.Context, f ListFilter) ([]models.AuditLog, in
 	}
 	defer rows.Close()
 
-	var logs []models.AuditLog
+	logs := make([]models.AuditLog, 0)
 	for rows.Next() {
 		var l models.AuditLog
 		if err := rows.Scan(
@@ -141,7 +141,7 @@ func (s *Service) ListIntegrationLogs(ctx context.Context, f IntegrationFilter) 
 	}
 	defer rows.Close()
 
-	var logs []models.IntegrationLog
+	logs := make([]models.IntegrationLog, 0)
 	for rows.Next() {
 		var l models.IntegrationLog
 		if err := rows.Scan(
