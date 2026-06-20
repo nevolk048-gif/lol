@@ -42,7 +42,9 @@ export function TrafficControl({ providerId, currentStatus = true }: TrafficCont
       });
       if (!res.ok) throw new Error("Failed to fetch traffic status");
       const json = await res.json();
-      return json.data ?? json;
+      // json.data ?? json: если data null/undefined — вернули бы объект-конверт,
+      // и trafficStatus.enabled упало бы с TypeError. Берём только data.
+      return (json.data ?? null) as { enabled: boolean; disabled_reason?: string; disabled_at?: string } | null;
     },
   });
 
@@ -66,7 +68,8 @@ export function TrafficControl({ providerId, currentStatus = true }: TrafficCont
       });
       if (!res.ok) throw new Error("Failed to fetch traffic history");
       const json = await res.json();
-      return json.data ?? json;
+      // Всегда возвращаем массив — защита от json.data ?? json (объект вместо массива)
+      return (Array.isArray(json.data) ? json.data : []) as Array<{ id: string; action: string; reason?: string; created_at: string }>;
     },
   });
 
@@ -112,7 +115,7 @@ export function TrafficControl({ providerId, currentStatus = true }: TrafficCont
         throw new Error("Failed to update traffic");
       }
       const json = await res.json();
-      return json.data ?? json;
+      return json.data ?? null;
     },
     onSuccess: (_, variables) => {
       toast.success(variables.enabled ? "Трафик включен" : "Трафик отключен");
@@ -213,7 +216,7 @@ export function TrafficControl({ providerId, currentStatus = true }: TrafficCont
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {trafficHistory?.map((item: { id: string; action: string; reason?: string; created_at: string }) => (
+            {trafficHistory?.map((item) => (
               <div key={item.id} className="flex items-start gap-3 pb-3 border-b last:border-0">
                 <div className={`p-2 rounded-full ${item.action === 'ENABLED' ? 'bg-green-100' : 'bg-red-100'}`}>
                   {item.action === 'ENABLED' ? (
