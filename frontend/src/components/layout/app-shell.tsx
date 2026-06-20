@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
@@ -12,7 +12,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, fetchUser } = useAuthStore();
   const { setTheme, theme } = useThemeStore();
 
+  // Предотвращаем hydration mismatch: React 19 делает его fatal error.
+  // Сервер рендерит исходное состояние (нет localStorage), клиент — реальное.
+  // Держим spinner пока не выполнен первый useEffect (только на клиенте).
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
+    setMounted(true);
     fetchUser();
   }, [fetchUser]);
 
@@ -21,14 +27,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [setTheme, theme]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (mounted && !isAuthenticated) {
       router.push("/login");
     }
-  }, [isAuthenticated, router]);
+  }, [mounted, isAuthenticated, router]);
 
-  if (!isAuthenticated) {
+  // До mount: одинаковый вывод для сервера и клиента (нет mismatch)
+  if (!mounted || !isAuthenticated) {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex h-screen items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     );
