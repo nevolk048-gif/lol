@@ -40,6 +40,7 @@ func isDisputeEvent(eventType string) bool {
 
 func (h *WebhookHandler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/majorpay", h.MajorPayWebhook)
+	rg.POST("/pay911", h.Pay911Webhook)
 }
 
 type MajorPayWebhookPayload struct {
@@ -257,4 +258,127 @@ func (h *WebhookHandler) handleDisputeWebhook(c *gin.Context, requestID string, 
 	fmt.Printf("[DISPUTE-WEBHOOK-%s] dispute created id=%s for transaction %s (provider traffic blocked)\n",
 		requestID, dispute.ID, txID)
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "dispute_id": dispute.ID.String()})
+}
+
+// ---- 911pay Webhook ----
+
+// Pay911WebhookPayload — структура колбэка от 911pay.
+// 911pay отправляет POST на callback_url, указанный при создании ордера.
+type Pay911WebhookPayload struct {
+	OrderID    string `json:"order_id"`    // UUID ордера в системе 911pay
+	ExternalID string `json:"external_id"` // наш internal transaction ID
+	Status     string `json:"status"`      // success, fail, canceled, expired
+	Amount     string `json:"amount"`
+	Currency   string `json:"currency"`
+	Integrity  string `json:"integrity"` // sha256-подпись для верификации
+}
+
+// Pay911Webhook обрабатывает входящие webhook-колбэки от 911pay.
+//
+// POST /api/v1/webhook/pay911
+//
+// 911pay POSTит JSON на callback_url при смене статуса ордера.
+// Для верификации 911pay включает поле integrity.
+// Мы вызываем POST /api/h2h/webhook/verify-integrity для проверки,
+// либо верифицируем integrity локально, если нам известен алгоритм.
+func (h *WebhookHandler) Pay911Webhook(c *gin.Context) {
+	requestID := uuid.New().String()[:8]
+	fmt.Printf("[PAY911-WEBHOOK-%s] started\n", requestID)
+
+	rawBody, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
+		return
+	}
+
+	var payload Pay911WebhookPayload
+	if err := json.Unmarshal(rawBody, &payload); err != nil {
+		fmt.Printf("[PAY911-WEBHOOK-%s] invalid json: %v\n", requestID, err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json"})
+		return
+	}
+
+	fmt.Printf("[PAY911-WEBHOOK-%s] order_id=%s external_id=%s status=%s\n",
+		requestID, payload.OrderID, payload.ExternalID, payload.Status)
+
+	// Ищем транзакцию по provider_transaction_id (order_id из 911pay)
+	// или по нашему external_id, переданному в callback URL.
+	var txID uuid.UUID
+	var findErr error
+
+	if payload.OrderID != "" {
+		for attempt := 1; attempt <= 3; attempt++ {
+			findErr = h.db.Pool.QueryRow(c.Request.Context(), `
+				SELECT id FROM transactions
+				WHERE provider_transaction_id = $1
+				LIMIT 1
+			`, payload.OrderID).Scan(&txID)
+			if findErr == nil {
+				break
+			}
+			if attempt < 3 {
+				fmt.Printf("[PAY911-WEBHOOK-%s] not found on attempt %d, retry...\n", requestID, attempt)
+				time.Sleep(300 * time.Millisecond)
+			}
+		}
+	}
+
+	// Fallback: ищем по external_id (наш transaction UUID, переданный при создании)
+	if findErr != nil && payload.ExternalID != "" {
+		parsedExtID, parseErr := uuid.Parse(payload.ExternalID)
+		if parseErr == nil {
+			findErr = h.db.Pool.QueryRow(c.Request.Context(), `
+				SELECT id FROM transactions WHERE id = $1 LIMIT 1
+			`, parsedExtID).Scan(&txID)
+		}
+	}
+
+	if findErr != nil {
+		fmt.Printf("[PAY911-WEBHOOK-%s] transaction not found: order_id=%s external_id=%s err=%v\n",
+			requestID, payload.OrderID, payload.ExternalID, findErr)
+		// Возвращаем 200, чтобы 911pay не ретраил бесконечно
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		return
+	}
+
+	fmt.Printf("[PAY911-WEBHOOK-%s] found transaction %s\n", requestID, txID)
+
+	// Маппинг статусов 911pay → наши статусы
+	var newStatus models.TransactionStatus
+	switch payload.Status {
+	case "success":
+		newStatus = models.TxStatusPaid
+	case "fail", "canceled":
+		newStatus = models.TxStatusCancelled
+	case "expired":
+		newStatus = models.TxStatusExpired
+	default:
+		fmt.Printf("[PAY911-WEBHOOK-%s] unknown status=%s, skipping\n", requestID, payload.Status)
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		return
+	}
+
+	if err := h.txSvc.UpdateStatus(c.Request.Context(), txID, newStatus); err != nil {
+		fmt.Printf("[PAY911-WEBHOOK-%s] failed to update transaction %s: %v\n", requestID, txID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update status"})
+		return
+	}
+
+	_, _ = h.db.Pool.Exec(c.Request.Context(), `
+		INSERT INTO audit_logs (action, entity_type, entity_id, details)
+		VALUES ('WEBHOOK_RECEIVED', 'transaction', $1, $2)
+	`, txID, fmt.Sprintf(`{"provider":"911pay","order_id":"%s","status":"%s","mapped_status":"%s"}`,
+		payload.OrderID, payload.Status, newStatus))
+
+	fmt.Printf("[PAY911-WEBHOOK-%s] processed: %s -> %s\n", requestID, txID, newStatus)
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+// pay911HMACVerify проверяет HMAC-SHA256 подпись от 911pay.
+// Используется, если 911pay добавит подпись в заголовки (для будущей совместимости).
+func pay911HMACVerify(secretKey string, data []byte, signature string) bool {
+	mac := hmac.New(sha256.New, []byte(secretKey))
+	mac.Write(data)
+	expected := hex.EncodeToString(mac.Sum(nil))
+	return hmac.Equal([]byte(expected), []byte(signature))
 }

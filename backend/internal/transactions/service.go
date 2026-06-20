@@ -158,8 +158,8 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 	}
 
 	var provider models.Provider
-	err = s.db.Pool.QueryRow(ctx, `SELECT id, name, base_url, api_key, secret_key FROM providers WHERE id = $1`, routeResult.ProviderID).
-		Scan(&provider.ID, &provider.Name, &provider.BaseURL, &provider.APIKey, &provider.SecretKey)
+	err = s.db.Pool.QueryRow(ctx, `SELECT id, name, base_url, api_key, secret_key, merchant_id, webhook_url FROM providers WHERE id = $1`, routeResult.ProviderID).
+		Scan(&provider.ID, &provider.Name, &provider.BaseURL, &provider.APIKey, &provider.SecretKey, &provider.MerchantID, &provider.WebhookURL)
 	if err != nil {
 		return nil, fmt.Errorf("fetch provider: %w", err)
 	}
@@ -170,8 +170,102 @@ func (s *Service) CreateDeposit(ctx context.Context, casinoID uuid.UUID, req Cre
 	resp.Status = models.TxStatusWaitingPayment
 	resp.Provider = &ProviderInfo{ID: provider.ID, Name: provider.Name}
 
-	// Call provider API if base_url is configured
-	if provider.BaseURL != nil && *provider.BaseURL != "" {
+	// Определяем тип провайдера по имени для выбора клиента
+	providerName := provider.Name
+
+	// --- 911pay integration ---
+	if is911Pay(providerName) && provider.MerchantID != nil && *provider.MerchantID != "" {
+		fmt.Printf("[DEBUG] Calling 911pay API for transaction %s\n", txID)
+
+		baseURL := ""
+		if provider.BaseURL != nil {
+			baseURL = *provider.BaseURL
+		}
+		pay911Client := integrations.NewPay911ClientWithBase(baseURL, *provider.MerchantID, provider.SecretKey)
+
+		// Формируем callback URL на наш webhook эндпоинт
+		// base_url берётся из конфигурации, но мы не имеем его здесь напрямую —
+		// используем provider.WebhookURL если задан, иначе оставляем пустым
+		// (911pay в этом случае не будет слать колбэки, и мы будем полагаться на polling или
+		// ручное подтверждение)
+		callbackURL := ""
+		if provider.WebhookURL != nil && *provider.WebhookURL != "" {
+			callbackURL = *provider.WebhookURL
+		}
+
+		pay911Req := integrations.Pay911OrderCreateRequest{
+			ExternalID:  txID.String(), // наш transaction ID как external_id
+			Amount:      int64(req.Amount * 100), // в минорных единицах (копейки)
+			Currency:    normalizeCurrency(req.Currency),
+			CallbackURL: callbackURL,
+		}
+
+		if req.PaymentMethod != nil && *req.PaymentMethod != "" && *req.PaymentMethod != "auto" {
+			pay911Req.PaymentGateway = *req.PaymentMethod
+		}
+
+		fmt.Printf("[DEBUG] 911pay request: amount=%d, currency=%s, external_id=%s\n",
+			pay911Req.Amount, pay911Req.Currency, pay911Req.ExternalID)
+
+		pay911Order, err := pay911Client.CreateOrder(ctx, pay911Req)
+		if err != nil {
+			fmt.Printf("[ERROR] 911pay API call failed: %v (continuing without provider requisites)\n", err)
+			errorDetails := map[string]interface{}{
+				"error":    err.Error(),
+				"provider": "911pay",
+			}
+			errorJSON, _ := json.Marshal(errorDetails)
+			_, _ = s.db.Pool.Exec(ctx, `
+				INSERT INTO audit_logs (action, entity_type, entity_id, details)
+				VALUES ('PROVIDER_API_ERROR', 'transaction', $1, $2)
+			`, txID, string(errorJSON))
+		} else {
+			fmt.Printf("[SUCCESS] 911pay order created: order_id=%s status=%s\n",
+				pay911Order.OrderID, pay911Order.Status)
+
+			// Сохраняем UUID ордера 911pay как provider_transaction_id
+			if pay911Order.OrderID != "" {
+				if result, saveErr := s.db.Pool.Exec(ctx, `
+					UPDATE transactions
+					SET provider_transaction_id = $2, updated_at = NOW()
+					WHERE id = $1
+				`, txID, pay911Order.OrderID); saveErr != nil {
+					fmt.Printf("[ERROR] Failed to save provider_transaction_id: %v\n", saveErr)
+				} else {
+					fmt.Printf("[DEBUG] Saved provider_transaction_id='%s' (rows affected: %d)\n",
+						pay911Order.OrderID, result.RowsAffected())
+				}
+			}
+
+			// Извлекаем реквизиты из ответа 911pay
+			// Для Merchant API реквизиты доступны через payment_link (hosted page).
+			// Если 911pay вернул payment_detail (H2H или ранний Merchant API) — используем их.
+			if pay911Order.PaymentDetail != nil && pay911Order.PaymentDetail.Detail != "" {
+				pd := pay911Order.PaymentDetail
+				resp.Requisite = &RequisiteInfo{
+					BankName:      pay911Order.PaymentGatewayName,
+					HolderName:    pd.Initials,
+					AccountNumber: pd.Detail,
+				}
+				fmt.Printf("[DEBUG] 911pay requisites: bank=%s holder=%s detail=%s\n",
+					pay911Order.PaymentGatewayName, pd.Initials, pd.Detail)
+			}
+
+			// Лог успешного вызова
+			successDetails := map[string]interface{}{
+				"provider":                "911pay",
+				"provider_transaction_id": pay911Order.OrderID,
+				"status":                  pay911Order.Status,
+				"payment_link":            pay911Order.PaymentLink,
+			}
+			successJSON, _ := json.Marshal(successDetails)
+			_, _ = s.db.Pool.Exec(ctx, `
+				INSERT INTO audit_logs (action, entity_type, entity_id, details)
+				VALUES ('PROVIDER_API_CALLED', 'transaction', $1, $2)
+			`, txID, string(successJSON))
+		}
+	} else if provider.BaseURL != nil && *provider.BaseURL != "" {
+		// --- MajorPay / generic provider integration ---
 		fmt.Printf("[DEBUG] Calling provider API: %s for transaction %s\n", *provider.BaseURL, txID)
 
 		providerClient := integrations.NewMajorPayClient(*provider.BaseURL, provider.APIKey, provider.SecretKey)
@@ -449,6 +543,29 @@ func (s *Service) UpdateStatus(ctx context.Context, id uuid.UUID, status models.
 func (s *Service) scanTransaction(ctx context.Context, query string, id uuid.UUID) (*models.Transaction, error) {
 	row := s.db.Pool.QueryRow(ctx, query, id)
 	return scanTransactionRow(row)
+}
+
+// is911Pay возвращает true, если имя провайдера соответствует 911pay.
+func is911Pay(name string) bool {
+	switch name {
+	case "911pay", "911Pay", "911PAY", "Pay911", "pay911":
+		return true
+	}
+	return false
+}
+
+// normalizeCurrency приводит код валюты к нижнему регистру для 911pay API
+// (API принимает "rub", "usd" и т.д.)
+func normalizeCurrency(currency string) string {
+	result := make([]byte, len(currency))
+	for i, c := range currency {
+		if c >= 'A' && c <= 'Z' {
+			result[i] = byte(c + 32)
+		} else {
+			result[i] = byte(c)
+		}
+	}
+	return string(result)
 }
 
 func scanTransactionRow(row pgx.Row) (*models.Transaction, error) {
